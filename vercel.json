@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
-  "installCommand": "npm run install:all",
+  "installCommand": "NODE_ENV=development npm run install:all",
   "framework": null,
   "functions": {
     "api/index.ts": {
