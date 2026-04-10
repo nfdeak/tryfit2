@@ -1,20 +1,18 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
   "installCommand": "npm run install:all",
   "framework": null,
   "functions": {
-    "server/api/index.ts": {
-      "runtime": "@vercel/node@5.7.3",
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server/api/index.ts" },
-    { "source": "/((?!server/api).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
