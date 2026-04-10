@@ -1,0 +1,156 @@
+// Prisma schema — PostgreSQL (Neon) for both local dev and Vercel production.
+// `schema.postgres.prisma` is kept as a backup copy of this file. A SQLite
+// variant is preserved in git history if you ever need to revert.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  username       String?   @unique
+  email          String?   @unique
+  passwordHash   String?
+  googleId       String?   @unique
+  name           String?
+  avatar         String?
+  onboardingDone Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  mealLogs       MealLog[]
+  shoppingItems  ShoppingItem[]
+  planWeeks      PlanWeek[]
+  profile        UserProfile?
+  mealPlans      MealPlan[]
+  generatedShoppingLists GeneratedShoppingList[]
+  weightLogs     WeightLog[]
+}
+
+model WeightLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  weightKg  Float
+  loggedAt  DateTime @default(now())
+  note      String?  @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, loggedAt])
+}
+
+model UserProfile {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id])
+  name                 String
+  age                  Int
+  gender               String
+  country              String
+  city                 String
+  weightKg             Float
+  heightCm             Float
+  targetWeightKg       Float
+  mealPreference       String
+  cuisinePreferences   String   @default("[]")
+  mealsPerDay          Int      @default(4)
+  eatingWindow         String   @default("standard")
+  allergies            String   @default("[]")
+  preferredIngredients String   @default("[]")
+  avoidIngredients     String   @default("[]")
+  primaryGoal          String
+  dietIntensity        String
+  activityLevel        String
+  healthConditions     String   @default("[]")
+  tdee                 Float
+  targetCalories       Float
+  proteinTarget        Float
+  fatTarget            Float
+  carbTarget           Float
+  fibreTarget          Float
+  wakeUpTime           String   @default("07:00")
+  sleepTime            String   @default("23:00")
+  cookingStyle         String   @default("home")
+  kitchenEquipment     String   @default("[]")
+  weeklyBudget         Float?
+  budgetCurrency       String   @default("INR")
+  waterIntakeGoal      Int      @default(8)
+  mealPlanCustomInstructions  String?  @default("")
+  customInstructionsUpdatedAt DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model MealPlan {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  weekStartDate DateTime
+  generatedAt   DateTime      @default(now())
+  isActive      Boolean       @default(true)
+  weekSummary   String        @default("{}")
+  days          MealPlanDay[]
+  shoppingLists GeneratedShoppingList[]
+}
+
+model MealPlanDay {
+  id            String   @id @default(cuid())
+  mealPlanId    String
+  mealPlan      MealPlan @relation(fields: [mealPlanId], references: [id])
+  dayIndex      Int
+  dayName       String
+  totalCalories Float
+  totalProtein  Float
+  totalCarbs    Float
+  totalFat      Float
+  totalFibre    Float
+  meals         String   @default("[]")
+}
+
+model GeneratedShoppingList {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  mealPlanId  String
+  mealPlan    MealPlan @relation(fields: [mealPlanId], references: [id])
+  categories  String   @default("[]")
+  peopleCount Int      @default(1)
+  createdAt   DateTime @default(now())
+}
+
+model MealLog {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  date      String
+  dayIndex  Int
+  mealIndex Int
+  eaten     Boolean  @default(false)
+  loggedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date, mealIndex])
+}
+
+model ShoppingItem {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  itemKey   String
+  bought    Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, itemKey])
+}
+
+model PlanWeek {
+  id            Int    @id @default(autoincrement())
+  userId        String
+  weekStartDate String
+  user          User   @relation(fields: [userId], references: [id])
+}

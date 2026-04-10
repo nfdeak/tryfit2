@@ -1,0 +1,37 @@
+/**
+ * Centralised API helpers.
+ *
+ * In development we rely on the Vite proxy (see vite.config.ts) so the
+ * frontend can use plain `/api/...` paths and same-origin cookies just work.
+ *
+ * In production on Vercel the API and the SPA are served from the same origin
+ * (rewrites in vercel.json), so `/api/...` paths still work without
+ * `VITE_API_URL`. The env variable is supported for the case where the API is
+ * deployed to a different origin (e.g. preview environments).
+ */
+const RAW_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+export function apiUrl(path: string): string {
+  const normalised = path.startsWith('/') ? path : `/${path}`;
+  return `${RAW_BASE}${normalised}`;
+}
+
+/**
+ * Thin fetch wrapper that always sends credentials and JSON headers and
+ * resolves the path through `apiUrl`. Use this for any new fetch call so the
+ * API base is consistent across environments.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('Content-Type') && init.body && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return fetch(apiUrl(path), {
+    credentials: 'include',
+    ...init,
+    headers
+  });
+}
+
+export const API_BASE = RAW_BASE;
