@@ -1,42 +1,34 @@
+/**
+ * Prisma singleton — uses the Neon serverless adapter in all environments
+ * where DATABASE_URL is a PostgreSQL connection string.
+ *
+ * Static imports are required here: ncc (used by @vercel/node to bundle the
+ * serverless function) cannot reliably resolve dynamic require() calls at
+ * pack time, which caused the previous implementation to hang on cold starts.
+ */
 import { PrismaClient } from '@prisma/client';
+import { PrismaNeon } from '@prisma/adapter-neon';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
 
-// Lazy-load Neon adapter only when needed (production) so local dev does
-// not require Neon packages to be present or configured.
-let neonModules: any = null;
-
-function loadNeonModules() {
-  if (neonModules) return neonModules;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { PrismaNeon } = require('@prisma/adapter-neon');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { Pool, neonConfig } = require('@neondatabase/serverless');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const ws = require('ws');
-  neonConfig.webSocketConstructor = ws;
-  neonModules = { PrismaNeon, Pool };
-  return neonModules;
-}
+// Provide a WebSocket constructor for the Neon pool.
+// Node.js 18/20 do not expose WebSocket as a global; ws is the drop-in.
+neonConfig.webSocketConstructor = ws;
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient(): PrismaClient {
-  // In production (Vercel serverless) use the Neon HTTP/WebSocket adapter
-  // so each cold start gets a pooled, serverless-compatible connection.
-  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
-    try {
-      const { PrismaNeon, Pool } = loadNeonModules();
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      const adapter = new PrismaNeon(pool);
-      return new PrismaClient({ adapter });
-    } catch (err) {
-      // If the Neon adapter is not installed/available, fall back to the
-      // standard client. This keeps local `NODE_ENV=production` builds
-      // working for diagnostics without forcing Neon setup.
-      console.warn('Neon adapter unavailable, using standard Prisma client:', err instanceof Error ? err.message : err);
-    }
+  const url = process.env.DATABASE_URL ?? '';
+
+  if (url.startsWith('postgresql://') || url.startsWith('postgres://')) {
+    // Neon serverless adapter — works on Vercel Functions and local dev
+    // when DATABASE_URL points at a Neon (or any Postgres) database.
+    const pool = new Pool({ connectionString: url });
+    const adapter = new PrismaNeon(pool);
+    return new PrismaClient({ adapter });
   }
 
-  // Development / fallback — use standard Prisma connection
+  // Fallback: standard Prisma client (useful if DATABASE_URL is not yet set)
   return new PrismaClient({
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
   });
