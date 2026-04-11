@@ -3,8 +3,7 @@
 // variant is preserved in git history if you ever need to revert.
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
