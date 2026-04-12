@@ -14,11 +14,23 @@ export function useTracker() {
         axios.get('/api/tracker/week', { withCredentials: true }),
         axios.get('/api/tracker/stats', { withCredentials: true })
       ]);
-      setWeekData(weekRes.data.week);
-      setWeekStart(weekRes.data.weekStart);
-      setStats(statsRes.data);
-      if (statsRes.data.mealsPerDay) {
-        setMealsPerDay(statsRes.data.mealsPerDay);
+      // Validate week data is an array of day tracker objects
+      const week = weekRes.data.week;
+      if (Array.isArray(week) && week.every((d: any) => d && typeof d.date === 'string' && Array.isArray(d.meals))) {
+        setWeekData(week);
+        setWeekStart(weekRes.data.weekStart);
+      } else {
+        setWeekData([]);
+      }
+      // Validate stats data has expected shape
+      const stats = statsRes.data;
+      if (stats && typeof stats.eaten === 'number' && typeof stats.adherence === 'number') {
+        setStats(stats);
+        if (stats.mealsPerDay) {
+          setMealsPerDay(stats.mealsPerDay);
+        }
+      } else {
+        setStats({ eaten: 0, total: 0, adherence: 0, streak: 0, remaining: 0 });
       }
     } catch {
       // silent

@@ -10,6 +10,7 @@ import { GoalProjectionCard } from './weight/GoalProjectionCard';
 import { WeightProgressChart } from './weight/WeightProgressChart';
 import { WeightLogModal } from './weight/WeightLogModal';
 import { WeightLogList } from './weight/WeightLogList';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export function ProfileTab() {
   const { user, logout, refreshUser } = useAuth();
@@ -209,7 +210,9 @@ export function ProfileTab() {
 
           {/* Weight Tracking Section */}
           <WeightStatsHeader />
-          <WeightProgressChart />
+          <ErrorBoundary>
+            <WeightProgressChart />
+          </ErrorBoundary>
           <WeightLogList />
 
           <div className="bg-surface rounded-2xl border border-border p-4 card-glow">

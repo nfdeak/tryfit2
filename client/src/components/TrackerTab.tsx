@@ -5,6 +5,7 @@ import { MealRow } from './MealRow';
 import { useTracker } from '../hooks/useTracker';
 import { useAppStore } from '../store/appStore';
 import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export function TrackerTab() {
   const { weekData, stats, weekStart, toggleMeal } = useTracker();
@@ -46,13 +47,15 @@ export function TrackerTab() {
       {/* Adherence chart */}
       {stats && stats.eaten > 0 && (
         <div className="bg-surface rounded-2xl p-4 flex items-center gap-4 border border-border card-glow">
-          <div className="w-20 h-20">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="100%" data={adherenceData} startAngle={90} endAngle={90 - 360 * (stats.adherence / 100)}>
-                <RadialBar dataKey="value" cornerRadius={4} background={{ fill: '#2A2D3E' }} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-          </div>
+          <ErrorBoundary fallback={<div className="w-20 h-20" />}>
+            <div className="w-20 h-20">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="100%" data={adherenceData} startAngle={90} endAngle={90 - 360 * (stats.adherence / 100)}>
+                  <RadialBar dataKey="value" cornerRadius={4} background={{ fill: '#2A2D3E' }} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+            </div>
+          </ErrorBoundary>
           <div>
             <p className="text-primary font-display font-bold text-3xl">{stats.adherence}<span className="text-lg text-secondary">%</span></p>
             <p className="text-secondary text-sm font-sans">Week adherence</p>

@@ -10,14 +10,16 @@ export function useWeightChart(
     // Build a map of all dates
     const dateMap = new Map<string, ChartPoint>();
 
-    // Add projection points
+    // Add projection points (skip invalid entries)
     for (const p of projection) {
+      if (!p || typeof p.date !== 'string' || typeof p.weightKg !== 'number') continue;
       const key = p.date;
       dateMap.set(key, { date: key, projected: p.weightKg });
     }
 
-    // Add actual weight logs
+    // Add actual weight logs (skip invalid entries)
     for (const log of logs) {
+      if (!log || typeof log.loggedAt !== 'string' || typeof log.weightKg !== 'number') continue;
       const key = log.loggedAt.substring(0, 10); // YYYY-MM-DD
       const existing = dateMap.get(key) || { date: key };
       existing.actual = log.weightKg;

@@ -9,13 +9,19 @@ export function useShopping() {
   const loadShopping = useCallback(async () => {
     try {
       const res = await axios.get('/api/shopping', { withCredentials: true });
-      setShoppingData(
-        res.data.categories,
-        res.data.totalItems,
-        res.data.boughtItems,
-        res.data.isGenerated || false,
-        res.data.peopleCount || 1
-      );
+      // Validate shopping data has expected shape
+      const categories = res.data.categories;
+      if (Array.isArray(categories) && categories.every((c: any) => c && typeof c.name === 'string' && Array.isArray(c.items))) {
+        setShoppingData(
+          categories,
+          typeof res.data.totalItems === 'number' ? res.data.totalItems : 0,
+          typeof res.data.boughtItems === 'number' ? res.data.boughtItems : 0,
+          res.data.isGenerated || false,
+          typeof res.data.peopleCount === 'number' ? res.data.peopleCount : 1
+        );
+      } else {
+        setShoppingData([], 0, 0, false, 1);
+      }
     } catch {
       // silent
     }

@@ -43,8 +43,15 @@ export const useWeightStore = create<WeightState>((set, get) => ({
       const res = await fetch('/api/weight/logs', { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
-      set({ logs: data.logs || [] });
-    } catch {}
+      // Validate that data.logs is actually an array of log objects
+      if (Array.isArray(data.logs) && data.logs.every((l: any) => l && typeof l.weightKg === 'number')) {
+        set({ logs: data.logs });
+      } else {
+        set({ logs: [] });
+      }
+    } catch {
+      set({ logs: [] });
+    }
   },
 
   fetchProjection: async () => {
@@ -52,13 +59,20 @@ export const useWeightStore = create<WeightState>((set, get) => ({
       const res = await fetch('/api/weight/projection', { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
-      set({
-        projection: data.projection || [],
-        goalDate: data.goalDate,
-        weeklyLossKg: data.weeklyLossKg,
-        startWeight: data.startWeight
-      });
-    } catch {}
+      // Validate that data.projection is an array of {date, weightKg} objects
+      if (Array.isArray(data.projection) && data.projection.every((p: any) => p && typeof p.weightKg === 'number' && typeof p.date === 'string')) {
+        set({
+          projection: data.projection,
+          goalDate: typeof data.goalDate === 'string' ? data.goalDate : null,
+          weeklyLossKg: typeof data.weeklyLossKg === 'number' ? data.weeklyLossKg : 0.5,
+          startWeight: typeof data.startWeight === 'number' ? data.startWeight : 0
+        });
+      } else {
+        set({ projection: [], goalDate: null, weeklyLossKg: 0.5, startWeight: 0 });
+      }
+    } catch {
+      set({ projection: [], goalDate: null, weeklyLossKg: 0.5, startWeight: 0 });
+    }
   },
 
   logWeight: async (input) => {
