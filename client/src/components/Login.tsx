@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { apiUrl } from '../lib/api';
 
 export function Login() {
   const { login } = useAuth();
@@ -24,10 +25,10 @@ export function Login() {
   const handleGoogleLogin = async () => {
     try {
       // Check if Google OAuth is configured before redirecting
-      const res = await fetch('/api/auth/google/check', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/auth/google/check'), { credentials: 'include' });
       const data = await res.json();
       if (data.configured) {
-        window.location.href = '/api/auth/google';
+        window.location.href = apiUrl('/api/auth/google');
       } else {
         setError('Google Sign-In is not configured. Please use credentials to sign in.');
       }

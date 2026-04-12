@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
+import { apiUrl } from '../lib/api';
 import { useAppStore } from '../store/appStore';
 import { useWeightStore } from '../store/weightStore';
 import { UserProfile } from '../types';
@@ -59,7 +60,7 @@ export function ProfileTab() {
 
       const result = await new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/ai/generate-meal-plan');
+        xhr.open('POST', apiUrl('/api/ai/generate-meal-plan'));
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.withCredentials = true;
         xhr.timeout = 180000;

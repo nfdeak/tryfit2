@@ -16,37 +16,42 @@ function getMondayOfCurrentWeek(): string {
 
 // GET /api/plan — returns meal plan data (AI-generated or fallback to hardcoded)
 router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!;
+  try {
+    const userId = req.userId!;
 
-  // Try to find active AI-generated plan
-  const activePlan = await prisma.mealPlan.findFirst({
-    where: { userId, isActive: true },
-    include: { days: { orderBy: { dayIndex: 'asc' } } }
-  });
-
-  if (activePlan && activePlan.days.length > 0) {
-    const days = activePlan.days.map(d => ({
-      label: d.dayName,
-      dayIndex: d.dayIndex,
-      totalCalories: d.totalCalories,
-      totalProtein: d.totalProtein,
-      totalCarbs: d.totalCarbs,
-      totalFat: d.totalFat,
-      totalFibre: d.totalFibre,
-      meals: JSON.parse(d.meals)
-    }));
-
-    res.json({
-      days,
-      isGenerated: true,
-      weekSummary: JSON.parse(activePlan.weekSummary),
-      mealPlanId: activePlan.id
+    // Try to find active AI-generated plan
+    const activePlan = await prisma.mealPlan.findFirst({
+      where: { userId, isActive: true },
+      include: { days: { orderBy: { dayIndex: 'asc' } } }
     });
-    return;
-  }
 
-  // Fallback to hardcoded data
-  res.json({ days: MEAL_PLAN, isGenerated: false });
+    if (activePlan && activePlan.days.length > 0) {
+      const days = activePlan.days.map(d => ({
+        label: d.dayName,
+        dayIndex: d.dayIndex,
+        totalCalories: d.totalCalories,
+        totalProtein: d.totalProtein,
+        totalCarbs: d.totalCarbs,
+        totalFat: d.totalFat,
+        totalFibre: d.totalFibre,
+        meals: JSON.parse(d.meals)
+      }));
+
+      res.json({
+        days,
+        isGenerated: true,
+        weekSummary: JSON.parse(activePlan.weekSummary),
+        mealPlanId: activePlan.id
+      });
+      return;
+    }
+
+    // Fallback to hardcoded data
+    res.json({ days: MEAL_PLAN, isGenerated: false });
+  } catch (err) {
+    console.error('Plan fetch error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Failed to load meal plan.' });
+  }
 });
 
 // GET /api/plan/week-start

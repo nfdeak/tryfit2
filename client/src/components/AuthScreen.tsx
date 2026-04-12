@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, FormEvent } from 'react';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
+import { apiUrl } from '../lib/api';
 
 type AuthMode = 'login' | 'signup';
 type Strength = 'weak' | 'good' | 'strong';
@@ -254,10 +255,10 @@ export function AuthScreen() {
 
   const handleGoogleLogin = async () => {
     try {
-      const res = await fetch('/api/auth/google/check', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/auth/google/check'), { credentials: 'include' });
       const data = await res.json();
       if (data.configured) {
-        window.location.href = '/api/auth/google';
+        window.location.href = apiUrl('/api/auth/google');
       } else {
         setErrors({ general: 'Google Sign-In is not configured. Please use credentials to sign in.' });
       }

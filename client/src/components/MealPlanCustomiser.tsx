@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { apiUrl } from '../lib/api';
 
 const SUGGESTION_CHIPS = [
   { label: '+ More protein', text: 'Include more high-protein options in every meal' },
@@ -52,7 +53,7 @@ export function MealPlanCustomiser({
   const saveInstructions = useCallback(async (value: string) => {
     setSaveStatus('saving');
     try {
-      const res = await fetch('/api/profile/meal-instructions', {
+      const res = await fetch(apiUrl('/api/profile/meal-instructions'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

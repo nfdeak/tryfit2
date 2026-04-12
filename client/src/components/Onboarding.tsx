@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
+import { apiUrl } from '../lib/api';
 import { OnboardingData } from '../types';
 import { COUNTRIES, ALLERGENS, ALLERGEN_ICONS, INGREDIENT_CATEGORIES, INGREDIENT_ICONS, CUISINES, KITCHEN_EQUIPMENT, EQUIPMENT_ICONS, HEALTH_CONDITIONS } from '../data/onboarding';
 
@@ -70,7 +71,7 @@ export function Onboarding({ onComplete, userName }: Props) {
 
       const result = await new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/ai/generate-meal-plan');
+        xhr.open('POST', apiUrl('/api/ai/generate-meal-plan'));
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.withCredentials = true;
         xhr.timeout = 180000;
@@ -126,9 +127,7 @@ export function Onboarding({ onComplete, userName }: Props) {
     try {
       setGenStep('Saving your profile...');
       await axios.post('/api/profile', data, { withCredentials: true });
-      // Mark onboarding done without AI generation — use fallback plan
-      await axios.post('/api/auth/login', { }, { withCredentials: true }).catch(() => {});
-      // Just update onboarding flag via profile save — user can generate later
+      // Profile POST marks onboardingDone=true on the server — no extra call needed.
       await refreshUser();
       onComplete();
     } catch {

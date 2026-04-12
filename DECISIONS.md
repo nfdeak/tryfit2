@@ -68,3 +68,96 @@
 **Decision**: Add a simple signup flow with just username + password — no email, no OTP, no verification. Usernames stored lowercase and matched case-insensitively. Passwords hashed with bcrypt (saltRounds: 12). Rate limit: 5 signups per IP per hour, 30 username checks per minute.
 **Reason**: Keep friction low for new users while providing basic abuse protection. Username uniqueness is enforced case-insensitively by normalising to lowercase before storage and lookup. Login endpoint falls back to exact-match lookup for any legacy mixed-case accounts.
 **Trade-off**: No password recovery (no email on file), no account deduplication across Google+credentials (a user may have both). Reserved usernames (admin, root, system, support, help, dietplan, api, null, undefined) are blocked server-side and client-side.
+
+---
+
+## Production Deployment Audit (2026-04-12)
+
+Full audit and fix pass for Vercel production deployment. Below are all root causes found and files changed.
+
+### Root Causes Found
+
+1. **Cookie SameSite misconfiguration (CRITICAL)** — `setAuthCookie.ts` used `sameSite: 'none'` in production. Since the API and frontend share the same origin on Vercel (via rewrites), `SameSite=None` is wrong — it requires `Secure` and can cause cookies to be rejected by some browsers. Changed to `sameSite: 'lax'` (same-origin default) which works correctly for both same-origin requests and top-level navigations like Google OAuth redirects.
+
+2. **Missing try/catch on route handlers** — Login, signup, check-username, plan GET, and week-start routes were missing try/catch, meaning any Prisma error would crash the serverless function silently instead of returning a 500 JSON response. Wrapped all async route handlers in try/catch.
+
+3. **Prisma binary target missing for Vercel** — `schema.prisma` lacked `binaryTargets = ["native", "rhel-openssl-3.0.x"]`. Without `rhel-openssl-3.0.x`, Prisma Client fails to load on Vercel's Amazon Linux runtime.
+
+4. **Prisma singleton not cached in production** — `prisma.ts` only cached the singleton in `globalThis` when `NODE_ENV !== 'production'`, meaning each warm Lambda invocation could create a new PrismaClient. Fixed to always cache in `globalThis`.
+
+5. **Inconsistent API URL resolution in frontend** — `weightStore.ts` used bare `/api/...` paths (bypassing `apiUrl()`), and `Onboarding.tsx`, `ProfileTab.tsx`, `AuthScreen.tsx`, `Login.tsx`, `MealPlanCustomiser.tsx` all used bare fetch/XHR paths. Fixed all to use `apiUrl()` for consistency.
+
+6. **Axios defaults not configured globally** — `axios.defaults.baseURL` and `axios.defaults.withCredentials` were not set, requiring every call to manually pass `withCredentials: true`. Added global config in `api.ts` imported from `main.tsx`.
+
+7. **Missing env-var startup check** — No logging of which environment variables were missing at boot, making debugging on Vercel painful. Added startup check that logs missing required/optional vars.
+
+8. **Error middleware leaked stack traces** — Production error handler logged `err.message` only (not the full stack). Also lacked `headersSent` guard. Fixed both.
+
+9. **Missing unhandled rejection handler** — Unhandled promise rejections in serverless would crash silently. Added `process.on('unhandledRejection', ...)`.
+
+10. **Deprecated PWA meta tag** — `<meta name="apple-mobile-web-app-capable">` without `<meta name="mobile-web-app-capable">` causes a console deprecation warning. Added the modern tag.
+
+11. **Serverless function timeout too short** — `maxDuration: 30` in `vercel.json` is too short for AI meal plan generation (which streams for 30-60s). Increased to 60.
+
+12. **Pre-deploy script wrong path** — Referenced `server/api/index.ts` instead of `api/index.ts`.
+
+13. **Dead code in Onboarding skip flow** — Empty `POST /api/auth/login` call with no credentials was a no-op. Removed.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `server/src/utils/setAuthCookie.ts` | Cookie `sameSite: 'none'` → `'lax'` for same-origin Vercel deploys |
+| `server/src/app.ts` | Env-var check, error middleware improvements, unhandled rejection handler |
+| `server/src/lib/prisma.ts` | Always cache singleton in globalThis (prod + dev) |
+| `server/src/prisma/schema.prisma` | Added `binaryTargets = ["native", "rhel-openssl-3.0.x"]` |
+| `server/src/routes/auth.ts` | Added try/catch to login, signup, check-username, me |
+| `server/src/routes/plan.ts` | Added try/catch to GET /plan |
+| `server/src/routes/profile.ts` | Added try/catch to all route handlers |
+| `server/src/routes/shopping.ts` | Added try/catch to all route handlers |
+| `server/src/routes/tracker.ts` | Added try/catch to all route handlers |
+| `server/src/routes/weight.ts` | Added try/catch to all route handlers |
+| `client/src/lib/api.ts` | Added axios global defaults (baseURL, withCredentials) |
+| `client/src/main.tsx` | Import `api.ts` before App mounts |
+| `client/src/store/weightStore.ts` | Use `apiUrl()` for all fetch calls |
+| `client/src/components/Onboarding.tsx` | Use `apiUrl()` for XHR, removed dead login call |
+| `client/src/components/ProfileTab.tsx` | Use `apiUrl()` for XHR |
+| `client/src/components/AuthScreen.tsx` | Use `apiUrl()` for Google OAuth fetch/redirect |
+| `client/src/components/Login.tsx` | Use `apiUrl()` for Google OAuth fetch/redirect |
+| `client/src/components/MealPlanCustomiser.tsx` | Use `apiUrl()` for meal instructions fetch |
+| `client/index.html` | Added `<meta name="mobile-web-app-capable">` |
+| `vercel.json` | `maxDuration: 30` → `60` |
+| `scripts/pre-deploy-check.sh` | Fixed path `server/api/index.ts` → `api/index.ts` |
+
+### Vercel Environment Variables Required
+
+Ensure these are set in Vercel dashboard → Settings → Environment Variables:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | Yes | Neon pooled connection string |
+| `DIRECT_URL` | Yes | Neon direct (non-pooled) for migrations |
+| `JWT_SECRET` | Yes | Long random string (`openssl rand -base64 48`) |
+| `NODE_ENV` | Yes | Must be `production` |
+| `ANTHROPIC_API_KEY` | For AI | Required for meal plan generation |
+| `FRONTEND_URL` | Recommended | e.g. `https://your-app.vercel.app` — used for CORS and Google OAuth redirects |
+| `CLIENT_URL` | Recommended | Same as FRONTEND_URL (legacy compat) |
+| `GOOGLE_CLIENT_ID` | For OAuth | Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | For OAuth | Google Cloud Console |
+| `GOOGLE_CALLBACK_URL` | For OAuth | Must match Google Console exactly, e.g. `https://your-app.vercel.app/api/auth/google/callback` |
+
+### Deploy Commands
+
+```bash
+# Push fixes to GitHub (triggers Vercel auto-deploy)
+git add -A
+git commit -m "fix: production deployment audit — cookie, error handling, API paths"
+git push origin main
+
+# Or manual deploy
+vercel --prod
+```
+
+### Database Sync
+
+No schema changes were made to the data models. The only schema change was adding `binaryTargets` to the generator block, which only affects client generation (not the database). No migrations needed.

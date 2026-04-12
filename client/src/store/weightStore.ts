@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '../lib/api';
 import { WeightLog, WeightProjectionPoint, TimeRange } from '../types';
 
 interface WeightState {
@@ -40,7 +41,7 @@ export const useWeightStore = create<WeightState>((set, get) => ({
 
   fetchLogs: async () => {
     try {
-      const res = await fetch('/api/weight/logs', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/weight/logs'), { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
       // Validate that data.logs is actually an array of log objects
@@ -56,7 +57,7 @@ export const useWeightStore = create<WeightState>((set, get) => ({
 
   fetchProjection: async () => {
     try {
-      const res = await fetch('/api/weight/projection', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/weight/projection'), { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
       // Validate that data.projection is an array of {date, weightKg} objects
@@ -76,7 +77,7 @@ export const useWeightStore = create<WeightState>((set, get) => ({
   },
 
   logWeight: async (input) => {
-    const res = await fetch('/api/weight/log', {
+    const res = await fetch(apiUrl('/api/weight/log'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -90,7 +91,7 @@ export const useWeightStore = create<WeightState>((set, get) => ({
   },
 
   updateLog: async (id, input) => {
-    const res = await fetch(`/api/weight/log/${id}`, {
+    const res = await fetch(apiUrl(`/api/weight/log/${id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -104,7 +105,7 @@ export const useWeightStore = create<WeightState>((set, get) => ({
   },
 
   deleteLog: async (id) => {
-    const res = await fetch(`/api/weight/log/${id}`, {
+    const res = await fetch(apiUrl(`/api/weight/log/${id}`), {
       method: 'DELETE',
       credentials: 'include'
     });

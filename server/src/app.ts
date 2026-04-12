@@ -9,6 +9,28 @@ import profileRoutes from './routes/profile';
 import aiRoutes from './routes/ai';
 import weightRoutes from './routes/weight';
 
+// ---------------------------------------------------------------------------
+// Startup env-var check — logs missing variables so debugging is instant.
+// ---------------------------------------------------------------------------
+const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const OPTIONAL_ENV = [
+  'DIRECT_URL', 'CLIENT_URL', 'FRONTEND_URL',
+  'ANTHROPIC_API_KEY', 'CLAUDE_MODEL',
+  'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL',
+  'NODE_ENV'
+] as const;
+
+(function checkEnv() {
+  const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`[env] MISSING required env vars: ${missing.join(', ')}`);
+  }
+  const unset = OPTIONAL_ENV.filter(k => !process.env[k]);
+  if (unset.length > 0) {
+    console.warn(`[env] Unset optional env vars: ${unset.join(', ')}`);
+  }
+})();
+
 /**
  * Build a CORS allowlist from environment variables. In production we accept:
  *  - the explicit CLIENT_URL
@@ -72,9 +94,11 @@ export function createApp(): Express {
   });
 
   // Production-safe error middleware: never leak stack traces.
+  // This also catches async errors forwarded via next(err).
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const isProd = process.env.NODE_ENV === 'production';
-    console.error('[server error]', err instanceof Error ? err.message : err);
+    console.error('[server error]', err instanceof Error ? err.stack || err.message : err);
+    if (res.headersSent) return; // avoid double-write
     if (isProd) {
       res.status(500).json({ error: 'server_error' });
     } else {
@@ -88,6 +112,12 @@ export function createApp(): Express {
 
   return app;
 }
+
+// Global unhandled promise rejection handler — prevents the serverless
+// function from crashing silently on unexpected async errors.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason instanceof Error ? reason.stack || reason.message : reason);
+});
 
 const app = createApp();
 export default app;

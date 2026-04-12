@@ -7,6 +7,10 @@
  * serverless invocation gets a pooled connection without requiring the
  * WebSocket adapter. This is the recommended approach for Vercel Node.js
  * functions (as opposed to Edge functions which cannot use TCP).
+ *
+ * The global singleton pattern prevents multiple PrismaClient instances
+ * across hot-reloads in development AND across warm invocations in
+ * production serverless functions.
  */
 import { PrismaClient } from '@prisma/client';
 
@@ -20,8 +24,8 @@ function createPrismaClient(): PrismaClient {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Cache in globalThis for BOTH development hot-reloads AND
+// production warm Lambda invocations.
+globalForPrisma.prisma = prisma;
 
 export default prisma;

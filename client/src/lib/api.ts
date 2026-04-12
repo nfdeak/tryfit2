@@ -9,7 +9,16 @@
  * `VITE_API_URL`. The env variable is supported for the case where the API is
  * deployed to a different origin (e.g. preview environments).
  */
+import axios from 'axios';
+
 const RAW_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+/**
+ * Configure axios defaults once so every call in every hook automatically
+ * uses the correct base URL and sends credentials (cookies).
+ */
+axios.defaults.baseURL = RAW_BASE || undefined;
+axios.defaults.withCredentials = true;
 
 export function apiUrl(path: string): string {
   const normalised = path.startsWith('/') ? path : `/${path}`;

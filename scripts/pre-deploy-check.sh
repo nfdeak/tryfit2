@@ -22,7 +22,7 @@ fail() { echo -e "${RED}✗ $1${RESET}"; exit 1; }
 
 # 1. Required files
 step "Checking required deployment files"
-for file in vercel.json package.json server/api/index.ts server/src/app.ts server/src/server.ts server/src/lib/prisma.ts client/src/lib/api.ts; do
+for file in vercel.json package.json api/index.ts server/src/app.ts server/src/server.ts server/src/lib/prisma.ts client/src/lib/api.ts; do
   [ -f "$file" ] || fail "Missing $file"
 done
 ok "All deployment files present"

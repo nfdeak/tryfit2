@@ -7,151 +7,166 @@ const router = Router();
 
 // GET /api/profile — get current user's profile
 router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const profile = await prisma.userProfile.findUnique({
-    where: { userId: req.userId! }
-  });
+  try {
+    const profile = await prisma.userProfile.findUnique({
+      where: { userId: req.userId! }
+    });
 
-  if (!profile) {
-    res.json({ profile: null });
-    return;
-  }
-
-  res.json({
-    profile: {
-      ...profile,
-      cuisinePreferences: JSON.parse(profile.cuisinePreferences),
-      allergies: JSON.parse(profile.allergies),
-      preferredIngredients: JSON.parse(profile.preferredIngredients),
-      avoidIngredients: JSON.parse(profile.avoidIngredients),
-      healthConditions: JSON.parse(profile.healthConditions),
-      kitchenEquipment: JSON.parse(profile.kitchenEquipment),
-      bmi: calculateBMI(profile.weightKg, profile.heightCm),
-      mealPlanCustomInstructions: profile.mealPlanCustomInstructions || ''
+    if (!profile) {
+      res.json({ profile: null });
+      return;
     }
-  });
+
+    res.json({
+      profile: {
+        ...profile,
+        cuisinePreferences: JSON.parse(profile.cuisinePreferences),
+        allergies: JSON.parse(profile.allergies),
+        preferredIngredients: JSON.parse(profile.preferredIngredients),
+        avoidIngredients: JSON.parse(profile.avoidIngredients),
+        healthConditions: JSON.parse(profile.healthConditions),
+        kitchenEquipment: JSON.parse(profile.kitchenEquipment),
+        bmi: calculateBMI(profile.weightKg, profile.heightCm),
+        mealPlanCustomInstructions: profile.mealPlanCustomInstructions || ''
+      }
+    });
+  } catch (err) {
+    console.error('Profile fetch error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Failed to load profile.' });
+  }
 });
 
 // POST /api/profile — create or update profile
 router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const data = req.body;
+  try {
+    const userId = req.userId!;
+    const data = req.body;
 
-  // Calculate nutrition targets
-  const targets = calculateTDEE({
-    weightKg: data.weightKg,
-    heightCm: data.heightCm,
-    age: data.age,
-    gender: data.gender,
-    activityLevel: data.activityLevel,
-    dietIntensity: data.dietIntensity,
-    primaryGoal: data.primaryGoal
-  });
-
-  const profileData = {
-    userId,
-    name: data.name,
-    age: data.age,
-    gender: data.gender,
-    country: data.country,
-    city: data.city,
-    weightKg: data.weightKg,
-    heightCm: data.heightCm,
-    targetWeightKg: data.targetWeightKg,
-    mealPreference: data.mealPreference,
-    cuisinePreferences: JSON.stringify(data.cuisinePreferences || []),
-    mealsPerDay: data.mealsPerDay || 4,
-    eatingWindow: data.eatingWindow || 'standard',
-    allergies: JSON.stringify(data.allergies || []),
-    preferredIngredients: JSON.stringify(data.preferredIngredients || []),
-    avoidIngredients: JSON.stringify(data.avoidIngredients || []),
-    primaryGoal: data.primaryGoal,
-    dietIntensity: data.dietIntensity,
-    activityLevel: data.activityLevel,
-    healthConditions: JSON.stringify(data.healthConditions || []),
-    wakeUpTime: data.wakeUpTime || '07:00',
-    sleepTime: data.sleepTime || '23:00',
-    cookingStyle: data.cookingStyle || 'home',
-    kitchenEquipment: JSON.stringify(data.kitchenEquipment || []),
-    weeklyBudget: data.weeklyBudget || null,
-    budgetCurrency: data.budgetCurrency || 'INR',
-    waterIntakeGoal: data.waterIntakeGoal || 8,
-    ...targets
-  };
-
-  const existing = await prisma.userProfile.findUnique({ where: { userId } });
-
-  let profile;
-  if (existing) {
-    profile = await prisma.userProfile.update({
-      where: { userId },
-      data: profileData
+    // Calculate nutrition targets
+    const targets = calculateTDEE({
+      weightKg: data.weightKg,
+      heightCm: data.heightCm,
+      age: data.age,
+      gender: data.gender,
+      activityLevel: data.activityLevel,
+      dietIntensity: data.dietIntensity,
+      primaryGoal: data.primaryGoal
     });
-  } else {
-    profile = await prisma.userProfile.create({
-      data: profileData
+
+    const profileData = {
+      userId,
+      name: data.name,
+      age: data.age,
+      gender: data.gender,
+      country: data.country,
+      city: data.city,
+      weightKg: data.weightKg,
+      heightCm: data.heightCm,
+      targetWeightKg: data.targetWeightKg,
+      mealPreference: data.mealPreference,
+      cuisinePreferences: JSON.stringify(data.cuisinePreferences || []),
+      mealsPerDay: data.mealsPerDay || 4,
+      eatingWindow: data.eatingWindow || 'standard',
+      allergies: JSON.stringify(data.allergies || []),
+      preferredIngredients: JSON.stringify(data.preferredIngredients || []),
+      avoidIngredients: JSON.stringify(data.avoidIngredients || []),
+      primaryGoal: data.primaryGoal,
+      dietIntensity: data.dietIntensity,
+      activityLevel: data.activityLevel,
+      healthConditions: JSON.stringify(data.healthConditions || []),
+      wakeUpTime: data.wakeUpTime || '07:00',
+      sleepTime: data.sleepTime || '23:00',
+      cookingStyle: data.cookingStyle || 'home',
+      kitchenEquipment: JSON.stringify(data.kitchenEquipment || []),
+      weeklyBudget: data.weeklyBudget || null,
+      budgetCurrency: data.budgetCurrency || 'INR',
+      waterIntakeGoal: data.waterIntakeGoal || 8,
+      ...targets
+    };
+
+    const existing = await prisma.userProfile.findUnique({ where: { userId } });
+
+    let profile;
+    if (existing) {
+      profile = await prisma.userProfile.update({
+        where: { userId },
+        data: profileData
+      });
+    } else {
+      profile = await prisma.userProfile.create({
+        data: profileData
+      });
+    }
+
+    // Mark onboarding as done
+    await prisma.user.update({
+      where: { id: userId },
+      data: { onboardingDone: true }
     });
+
+    // Auto-insert first weight log if none exists
+    const existingWeightLog = await prisma.weightLog.findFirst({ where: { userId } });
+    if (!existingWeightLog) {
+      await prisma.weightLog.create({
+        data: { userId, weightKg: data.weightKg, note: 'Starting weight' }
+      });
+    }
+
+    res.json({
+      profile: {
+        ...profile,
+        cuisinePreferences: JSON.parse(profile.cuisinePreferences),
+        allergies: JSON.parse(profile.allergies),
+        preferredIngredients: JSON.parse(profile.preferredIngredients),
+        avoidIngredients: JSON.parse(profile.avoidIngredients),
+        healthConditions: JSON.parse(profile.healthConditions),
+        kitchenEquipment: JSON.parse(profile.kitchenEquipment),
+        bmi: calculateBMI(profile.weightKg, profile.heightCm)
+      },
+      targets
+    });
+  } catch (err) {
+    console.error('Profile save error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Failed to save profile.' });
   }
-
-  // Mark onboarding as done
-  await prisma.user.update({
-    where: { id: userId },
-    data: { onboardingDone: true }
-  });
-
-  // Auto-insert first weight log if none exists
-  const existingWeightLog = await prisma.weightLog.findFirst({ where: { userId } });
-  if (!existingWeightLog) {
-    await prisma.weightLog.create({
-      data: { userId, weightKg: data.weightKg, note: 'Starting weight' }
-    });
-  }
-
-  res.json({
-    profile: {
-      ...profile,
-      cuisinePreferences: JSON.parse(profile.cuisinePreferences),
-      allergies: JSON.parse(profile.allergies),
-      preferredIngredients: JSON.parse(profile.preferredIngredients),
-      avoidIngredients: JSON.parse(profile.avoidIngredients),
-      healthConditions: JSON.parse(profile.healthConditions),
-      kitchenEquipment: JSON.parse(profile.kitchenEquipment),
-      bmi: calculateBMI(profile.weightKg, profile.heightCm)
-    },
-    targets
-  });
 });
 
 // PATCH /api/profile/meal-instructions — save custom meal plan instructions
 router.patch('/meal-instructions', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const { instructions } = req.body;
+  try {
+    const userId = req.userId!;
+    const { instructions } = req.body;
 
-  if (typeof instructions !== 'string') {
-    res.status(400).json({ error: 'Instructions must be a string' });
-    return;
-  }
-
-  const trimmed = instructions.trim();
-  if (trimmed.length > 500) {
-    res.status(400).json({ error: 'Instructions must be 500 characters or less' });
-    return;
-  }
-
-  const profile = await prisma.userProfile.findUnique({ where: { userId } });
-  if (!profile) {
-    res.status(400).json({ error: 'Profile not found' });
-    return;
-  }
-
-  await prisma.userProfile.update({
-    where: { userId },
-    data: {
-      mealPlanCustomInstructions: trimmed,
-      customInstructionsUpdatedAt: new Date()
+    if (typeof instructions !== 'string') {
+      res.status(400).json({ error: 'Instructions must be a string' });
+      return;
     }
-  });
 
-  res.json({ success: true, savedAt: new Date().toISOString() });
+    const trimmed = instructions.trim();
+    if (trimmed.length > 500) {
+      res.status(400).json({ error: 'Instructions must be 500 characters or less' });
+      return;
+    }
+
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      res.status(400).json({ error: 'Profile not found' });
+      return;
+    }
+
+    await prisma.userProfile.update({
+      where: { userId },
+      data: {
+        mealPlanCustomInstructions: trimmed,
+        customInstructionsUpdatedAt: new Date()
+      }
+    });
+
+    res.json({ success: true, savedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Meal instructions error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Failed to save instructions.' });
+  }
 });
 
 export default router;

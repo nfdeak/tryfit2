@@ -94,46 +94,51 @@ function issueToken(userId: string): string {
 
 // POST /api/auth/login (username + password)
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
-  const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  if (!username || !password) {
-    res.status(400).json({ error: 'Username and password required' });
-    return;
-  }
-
-  // Case-insensitive lookup (usernames are stored lowercase for new accounts)
-  const normalisedUsername = typeof username === 'string' ? username.toLowerCase() : '';
-  let user = await prisma.user.findUnique({ where: { username: normalisedUsername } });
-  // Fallback: check original case for legacy accounts stored with mixed case
-  if (!user && normalisedUsername !== username) {
-    user = await prisma.user.findUnique({ where: { username } });
-  }
-
-  if (!user || !user.passwordHash) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-
-  if (!valid) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-
-  const token = issueToken(user.id);
-  setAuthCookie(res, token);
-
-  res.json({
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar,
-      onboardingDone: user.onboardingDone
+    if (!username || !password) {
+      res.status(400).json({ error: 'Username and password required' });
+      return;
     }
-  });
+
+    // Case-insensitive lookup (usernames are stored lowercase for new accounts)
+    const normalisedUsername = typeof username === 'string' ? username.toLowerCase() : '';
+    let user = await prisma.user.findUnique({ where: { username: normalisedUsername } });
+    // Fallback: check original case for legacy accounts stored with mixed case
+    if (!user && normalisedUsername !== username) {
+      user = await prisma.user.findUnique({ where: { username } });
+    }
+
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!valid) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
+
+    const token = issueToken(user.id);
+    setAuthCookie(res, token);
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar,
+        onboardingDone: user.onboardingDone
+      }
+    });
+  } catch (err) {
+    console.error('Login error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
+  }
 });
 
 // POST /api/auth/signup
@@ -201,17 +206,22 @@ router.post('/signup', signupLimiter, async (req: Request, res: Response): Promi
 
 // GET /api/auth/check-username?username=...
 router.get('/check-username', checkUsernameLimiter, async (req: Request, res: Response): Promise<void> => {
-  const username = typeof req.query.username === 'string' ? req.query.username : '';
+  try {
+    const username = typeof req.query.username === 'string' ? req.query.username : '';
 
-  const check = validateUsername(username);
-  if (!check.valid) {
-    res.status(400).json({ error: 'validation_error', message: check.message, available: false, username });
-    return;
+    const check = validateUsername(username);
+    if (!check.valid) {
+      res.status(400).json({ error: 'validation_error', message: check.message, available: false, username });
+      return;
+    }
+
+    const existing = await prisma.user.findUnique({ where: { username: username.toLowerCase() } });
+
+    res.json({ available: !existing, username });
+  } catch (err) {
+    console.error('Check username error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Something went wrong.' });
   }
-
-  const existing = await prisma.user.findUnique({ where: { username: username.toLowerCase() } });
-
-  res.json({ available: !existing, username });
 });
 
 // POST /api/auth/logout
@@ -222,17 +232,22 @@ router.post('/logout', (_req: Request, res: Response): void => {
 
 // GET /api/auth/me
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const user = await prisma.user.findUnique({
-    where: { id: req.userId },
-    select: { id: true, username: true, email: true, name: true, avatar: true, onboardingDone: true }
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, username: true, email: true, name: true, avatar: true, onboardingDone: true }
+    });
 
-  if (!user) {
-    res.status(404).json({ error: 'User not found' });
-    return;
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ user });
+  } catch (err) {
+    console.error('Auth me error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error' });
   }
-
-  res.json({ user });
 });
 
 // GET /api/auth/google/check — check if Google OAuth is configured
