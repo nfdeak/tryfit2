@@ -31,6 +31,14 @@ export function WeightProgressChart() {
 
   const todayStr = new Date().toISOString().substring(0, 10);
 
+  // Sanitize chart data: ensure all values are primitives (not objects like {code, message})
+  const safeChartData = chartData.map(point => ({
+    ...point,
+    date: typeof point.date === 'string' ? point.date : '',
+    projected: typeof point.projected === 'number' ? point.projected : undefined,
+    actual: typeof point.actual === 'number' ? point.actual : undefined,
+  })).filter(point => typeof point.date === 'string' && point.date.length > 0);
+
   return (
     <div className="bg-surface rounded-2xl border border-border p-4 card-glow">
       <div className="flex items-center justify-between mb-3">
@@ -64,7 +72,7 @@ export function WeightProgressChart() {
       </div>
 
       <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+        <ComposedChart data={safeChartData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2A2D3E" />
           <XAxis
             dataKey="date"

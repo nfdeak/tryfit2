@@ -12,6 +12,7 @@ import { ShoppingTab } from './components/ShoppingTab';
 import { TipsTab } from './components/TipsTab';
 import { ProfileTab } from './components/ProfileTab';
 import { Toast, ToastHandle } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { TabId } from './types';
 
 export default function App() {
@@ -77,7 +78,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-dark">
       <div className="max-w-app mx-auto flex flex-col h-screen relative bg-dark">
-        <AppBar title="Diet Plan & Tracker" />
+        <ErrorBoundary>
+          <AppBar title="Diet Plan & Tracker" />
+        </ErrorBoundary>
 
         {/* PWA install banner */}
         {showInstallBanner && (
@@ -95,11 +98,13 @@ export default function App() {
 
         {/* Main content */}
         <main className="flex-1 overflow-hidden flex flex-col pb-16">
-          {activeTab === 'meals' && <MealsTab />}
-          {activeTab === 'tracker' && <TrackerTab />}
-          {activeTab === 'shopping' && <ShoppingTab />}
-          {activeTab === 'tips' && <TipsTab />}
-          {activeTab === 'profile' && <ProfileTab />}
+          <ErrorBoundary>
+            {activeTab === 'meals' && <MealsTab />}
+            {activeTab === 'tracker' && <TrackerTab />}
+            {activeTab === 'shopping' && <ShoppingTab />}
+            {activeTab === 'tips' && <TipsTab />}
+            {activeTab === 'profile' && <ProfileTab />}
+          </ErrorBoundary>
         </main>
 
         <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
