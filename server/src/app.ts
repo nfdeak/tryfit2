@@ -81,6 +81,13 @@ export function createApp(): Express {
       dbStatus = 'error';
       dbError = err?.message || String(err);
     }
+    // Extract just the host from DATABASE_URL for debugging (no credentials)
+    let dbHost = '';
+    try {
+      const url = new URL(process.env.DATABASE_URL || '');
+      dbHost = url.hostname;
+    } catch { dbHost = 'parse-error'; }
+
     res.json({
       status: 'ok',
       env: process.env.NODE_ENV || 'development',
@@ -88,6 +95,7 @@ export function createApp(): Express {
       db: dbStatus,
       dbError: dbError || undefined,
       hasDbUrl: !!process.env.DATABASE_URL,
+      dbHost,
     });
   });
   // Legacy alias
