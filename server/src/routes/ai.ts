@@ -300,11 +300,19 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
     });
     res.end();
   } catch (err: any) {
-    console.error('AI generation error:', err);
-    const errorMsg = err.message?.includes('timeout') || err.message?.includes('ETIMEDOUT')
-      ? 'AI generation timed out. Please try again.'
-      : 'Failed to generate meal plan. Please try again.';
-    sendEvent('error', { error: errorMsg });
+    console.error('AI generation error:', err?.message || err, err?.status, err?.error);
+    let errorMsg = 'Failed to generate meal plan. Please try again.';
+    if (err.message?.includes('timeout') || err.message?.includes('ETIMEDOUT')) {
+      errorMsg = 'AI generation timed out. Please try again.';
+    } else if (err?.status === 401 || err.message?.includes('auth')) {
+      errorMsg = 'AI API authentication failed. Check ANTHROPIC_API_KEY.';
+    } else if (err?.status === 404 || err.message?.includes('not_found')) {
+      errorMsg = `Model "${CLAUDE_MODEL}" not found. Check CLAUDE_MODEL env var.`;
+    }
+    sendEvent('error', {
+      error: errorMsg,
+      detail: err?.message || String(err)
+    });
     res.end();
   }
 });
