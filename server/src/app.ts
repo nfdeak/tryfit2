@@ -70,11 +70,24 @@ export function createApp(): Express {
   app.use(cookieParser());
 
   // Health check (used by Vercel + monitoring)
-  app.get('/api/health', (_req: Request, res: Response) => {
+  app.get('/api/health', async (_req: Request, res: Response) => {
+    let dbStatus = 'unknown';
+    let dbError = '';
+    try {
+      const { prisma } = await import('./lib/prisma');
+      await prisma.$queryRaw`SELECT 1`;
+      dbStatus = 'connected';
+    } catch (err: any) {
+      dbStatus = 'error';
+      dbError = err?.message || String(err);
+    }
     res.json({
       status: 'ok',
       env: process.env.NODE_ENV || 'development',
-      time: new Date().toISOString()
+      time: new Date().toISOString(),
+      db: dbStatus,
+      dbError: dbError || undefined,
+      hasDbUrl: !!process.env.DATABASE_URL,
     });
   });
   // Legacy alias
