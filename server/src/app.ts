@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import prisma from './lib/prisma';
 import authRoutes from './routes/auth';
 import planRoutes from './routes/plan';
 import trackerRoutes from './routes/tracker';
@@ -74,7 +75,6 @@ export function createApp(): Express {
     let dbStatus = 'unknown';
     let dbError = '';
     try {
-      const { prisma } = await import('./lib/prisma');
       await prisma.$queryRaw`SELECT 1`;
       dbStatus = 'connected';
     } catch (err: any) {
