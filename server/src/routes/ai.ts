@@ -7,7 +7,7 @@ import { calculateBMI } from '../utils/tdee';
 const router = Router();
 
 // Use Haiku for speed (3-5x faster than Sonnet for structured JSON)
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-3-5-20241022';
 
 // Rate limit: 3 calls per user per day
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -150,7 +150,7 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
 
       const stream = client.messages.stream({
         model: CLAUDE_MODEL,
-        max_tokens: 16000,
+        max_tokens: 12000,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: [
           { role: 'user', content: userPrompt },
@@ -158,12 +158,12 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
         ]
       });
 
-      // Stream token count progress to client
+      // Stream token count progress to client every ~300 chars
+      // Frequent SSE events also keep the connection alive on Vercel
       let tokenCount = 0;
       stream.on('text', (text) => {
         tokenCount += text.length;
-        // Send progress every ~500 chars
-        if (tokenCount % 500 < 10) {
+        if (tokenCount % 300 < text.length) {
           sendEvent('progress', { step: 'Writing meals...', tokens: tokenCount });
         }
       });
