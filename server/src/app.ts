@@ -73,29 +73,17 @@ export function createApp(): Express {
   // Health check (used by Vercel + monitoring)
   app.get('/api/health', async (_req: Request, res: Response) => {
     let dbStatus = 'unknown';
-    let dbError = '';
     try {
       await prisma.$queryRaw`SELECT 1`;
       dbStatus = 'connected';
-    } catch (err: any) {
+    } catch {
       dbStatus = 'error';
-      dbError = err?.message || String(err);
     }
-    // Extract just the host from DATABASE_URL for debugging (no credentials)
-    let dbHost = '';
-    try {
-      const url = new URL(process.env.DATABASE_URL || '');
-      dbHost = url.hostname;
-    } catch { dbHost = 'parse-error'; }
-
     res.json({
       status: 'ok',
       env: process.env.NODE_ENV || 'development',
       time: new Date().toISOString(),
       db: dbStatus,
-      dbError: dbError || undefined,
-      hasDbUrl: !!process.env.DATABASE_URL,
-      dbHost,
     });
   });
   // Legacy alias
