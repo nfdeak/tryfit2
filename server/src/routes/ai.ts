@@ -302,10 +302,7 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
     } else if (err?.status === 404 || err.message?.includes('not_found')) {
       errorMsg = `Model "${CLAUDE_MODEL}" not found. Check CLAUDE_MODEL env var.`;
     }
-    sendEvent('error', {
-      error: errorMsg,
-      detail: err?.message || String(err)
-    });
+    sendEvent('error', { error: errorMsg });
     res.end();
   }
 });
