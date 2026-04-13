@@ -7,7 +7,7 @@ import { calculateBMI } from '../utils/tdee';
 const router = Router();
 
 // Use Haiku for speed (3-5x faster than Sonnet for structured JSON)
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
 
 // Rate limit: 3 calls per user per day
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -31,19 +31,21 @@ function getMealTypes(mealsPerDay: number): string[] {
 }
 
 // Static system prompt — cacheable across requests
-const SYSTEM_PROMPT = `You are a professional nutritionist and meal planner. You generate 7-day personalised meal plans as pure JSON.
+const SYSTEM_PROMPT = `You are a professional nutritionist. Generate a 7-day meal plan as pure JSON.
 
 RULES:
-- Respect ALL allergies and avoidances strictly — health requirement
-- Use preferred ingredients wherever possible
-- Meals should be easy to cook (under 30 minutes)
-- Vary meals — never repeat the same meal in a week
-- Day totals must be within ±50 kcal of the daily calorie target
-- Descriptions must be concise cooking instructions with exact gram/ml quantities (e.g. "Heat 1 tsp ghee, sauté 150g chicken with 100g onions, add spices, serve with 80g rice")
-- Respond ONLY with valid JSON, no markdown, no preamble
+- Respect ALL allergies strictly
+- Use preferred ingredients
+- Easy meals (<30 min)
+- Vary meals across the week
+- Day totals within ±50 kcal of target
+- Short descriptions with gram quantities (e.g. "Sauté 150g chicken, 100g onions, serve with 80g rice")
+- ONLY valid JSON, no markdown
 
-JSON STRUCTURE:
-{"weekSummary":{"avgCalories":0,"avgProtein":0,"avgCarbs":0,"avgFat":0,"avgFibre":0},"days":[{"dayIndex":0,"dayName":"Monday","totalCalories":0,"totalProtein":0,"totalCarbs":0,"totalFat":0,"totalFibre":0,"meals":[{"mealIndex":0,"type":"Breakfast","time":"8:00 AM","name":"meal name","description":"Heat 1 tsp ghee, sauté 150g diced chicken with 80g onions, add 100g cooked rice and 30g peas","cookingTip":"one tip","ingredients":["150g chicken breast","80g onion"],calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}]}],"shoppingList":[{"category":"Proteins","items":[{"name":"Chicken breast","quantity":"1","unit":"kg"}]}]}`;
+JSON STRUCTURE (use exactly this shape):
+{"weekSummary":{"avgCalories":0,"avgProtein":0,"avgCarbs":0,"avgFat":0,"avgFibre":0},"days":[{"dayIndex":0,"dayName":"Monday","totalCalories":0,"totalProtein":0,"totalCarbs":0,"totalFat":0,"totalFibre":0,"meals":[{"mealIndex":0,"type":"Breakfast","time":"8:00 AM","name":"meal name","description":"brief instructions with gram quantities","ingredients":["150g chicken breast","80g onion"],"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}]}],"shoppingList":[{"category":"Proteins","items":[{"name":"Chicken breast","quantity":"1","unit":"kg"}]}]}
+
+Keep descriptions under 20 words. Be concise.`;
 
 function buildUserPrompt(profile: any): string {
   const bmi = calculateBMI(profile.weightKg, profile.heightCm);
@@ -142,69 +144,60 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
     sendEvent('progress', { step: 'Generating your personalised meal plan...' });
 
     let planData: any = null;
-    let lastError = '';
     const startTime = Date.now();
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      console.log(`AI generation attempt ${attempt}...`);
+    console.log(`AI generation starting with model ${CLAUDE_MODEL}...`);
 
-      const stream = client.messages.stream({
-        model: CLAUDE_MODEL,
-        max_tokens: 12000,
-        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [
-          { role: 'user', content: userPrompt },
-          ...(attempt > 1 ? [{ role: 'user' as const, content: 'Keep it concise. Return ONLY valid JSON.' }] : [])
-        ]
-      });
+    const stream = client.messages.stream({
+      model: CLAUDE_MODEL,
+      max_tokens: 8000,
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        { role: 'user', content: userPrompt }
+      ]
+    });
 
-      // Stream token count progress to client every ~300 chars
-      // Frequent SSE events also keep the connection alive on Vercel
-      let tokenCount = 0;
-      stream.on('text', (text) => {
-        tokenCount += text.length;
-        if (tokenCount % 300 < text.length) {
-          sendEvent('progress', { step: 'Writing meals...', tokens: tokenCount });
-        }
-      });
-
-      const message = await stream.finalMessage();
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`AI response in ${elapsed}s — stop_reason: ${message.stop_reason}, usage: ${JSON.stringify(message.usage)}`);
-
-      if (message.stop_reason === 'max_tokens') {
-        console.warn(`Attempt ${attempt}: Response truncated`);
-        lastError = 'AI response was too long and got cut off.';
-        continue;
+    // Stream token count progress to client every ~300 chars
+    // Frequent SSE events also keep the connection alive on Vercel
+    let tokenCount = 0;
+    stream.on('text', (text) => {
+      tokenCount += text.length;
+      if (tokenCount % 300 < text.length) {
+        sendEvent('progress', { step: 'Writing meals...', tokens: tokenCount });
       }
+    });
 
-      const textBlock = message.content.find(b => b.type === 'text');
-      if (!textBlock || textBlock.type !== 'text') {
-        lastError = 'AI returned no text response.';
-        continue;
-      }
+    const message = await stream.finalMessage();
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`AI response in ${elapsed}s — stop_reason: ${message.stop_reason}, usage: ${JSON.stringify(message.usage)}`);
 
-      try {
-        let raw = textBlock.text.trim();
-        if (raw.startsWith('```')) {
-          raw = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-        }
-        const jsonStart = raw.indexOf('{');
-        const jsonEnd = raw.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          raw = raw.substring(jsonStart, jsonEnd + 1);
-        }
-        planData = JSON.parse(raw);
-        break;
-      } catch (parseErr) {
-        console.error(`Attempt ${attempt}: JSON parse failed (${textBlock.text.length} chars)`);
-        lastError = 'AI returned malformed data.';
-        continue;
-      }
+    if (message.stop_reason === 'max_tokens') {
+      sendEvent('error', { error: 'AI response was too long. Please try again.' });
+      res.end();
+      return;
     }
 
-    if (!planData) {
-      sendEvent('error', { error: `${lastError} Please try again.` });
+    const textBlock = message.content.find(b => b.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') {
+      sendEvent('error', { error: 'AI returned no text response. Please try again.' });
+      res.end();
+      return;
+    }
+
+    try {
+      let raw = textBlock.text.trim();
+      if (raw.startsWith('```')) {
+        raw = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      }
+      const jsonStart = raw.indexOf('{');
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        raw = raw.substring(jsonStart, jsonEnd + 1);
+      }
+      planData = JSON.parse(raw);
+    } catch (parseErr) {
+      console.error(`JSON parse failed (${textBlock.text.length} chars)`);
+      sendEvent('error', { error: 'AI returned malformed data. Please try again.' });
       res.end();
       return;
     }
