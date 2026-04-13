@@ -7,7 +7,7 @@ import { calculateBMI } from '../utils/tdee';
 const router = Router();
 
 // Use Haiku for speed (3-5x faster than Sonnet for structured JSON)
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-3-5-20241022';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
 
 // Rate limit: 3 calls per user per day
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
