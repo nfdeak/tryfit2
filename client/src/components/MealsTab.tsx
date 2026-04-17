@@ -8,6 +8,7 @@ import { Meal, MealTarget } from '../types';
 import { ReplacedMealCard } from './ReplacedMealCard';
 import { MealReplacerSheet } from './MealReplacerSheet';
 import { WaterIntakeCard } from './WaterIntakeCard';
+import { MacroAchievementCard } from './MacroAchievementCard';
 
 const MEAL_ICONS = ['🌅', '☀️', '🍎', '🌙', '🥗'];
 
@@ -31,7 +32,8 @@ export function MealsTab() {
   const {
     selectedDate, setSelectedDate,
     mealsCalendarOffset, setMealsCalendarOffset,
-    planDays, mealsPerDay, planDuration
+    planDays, mealsPerDay, planDuration,
+    profile
   } = useAppStore();
   const { weekData, toggleMeal } = useTracker();
   const { planDays: planDaysFromPlan } = usePlan();
@@ -248,6 +250,19 @@ export function MealsTab() {
 
             {/* Water intake */}
             <WaterIntakeCard date={selectedDate} />
+
+            {/* Macro achievement */}
+            {profile && (
+              <MacroAchievementCard
+                meals={meals}
+                eatenMask={meals.map((_, i) => getMealEaten(i))}
+                replacements={replacements}
+                date={selectedDate}
+                profile={profile}
+                eatenCount={eatenCount}
+                mealsPerDay={mealsPerDay}
+              />
+            )}
 
             {/* Meal cards */}
             {meals.map((meal, mealIdx) => {

@@ -82,6 +82,11 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
       budgetCurrency: data.budgetCurrency || 'INR',
       waterIntakeGoal: data.waterIntakeGoal || 8,
       planDuration: data.planDuration === 14 ? 14 : 7,
+      countryCode: data.countryCode || null,
+      eatingWindowHours: data.eatingWindowHours ?? null,
+      fastingWindowHours: data.fastingWindowHours ?? null,
+      eatingStartTime: data.eatingStartTime || null,
+      eatingEndTime: data.eatingEndTime || null,
       ...targets
     };
 

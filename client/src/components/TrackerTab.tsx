@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, getDaysInMonth, getDay, addDays, startOfWeek } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, getDaysInMonth, getDay, addDays, startOfWeek, getYear, getMonth } from 'date-fns';
 import axios from 'axios';
 import { useAppStore } from '../store/appStore';
 import { useMealReplacerStore } from '../store/mealReplacerStore';
@@ -9,12 +9,13 @@ import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+// Use format() (local time) not toISOString() (UTC) to avoid timezone off-by-one
 function getMonthStr(date: Date): string {
-  return date.toISOString().slice(0, 7); // "YYYY-MM"
+  return format(date, 'yyyy-MM');
 }
 
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return format(new Date(), 'yyyy-MM-dd');
 }
 
 function getWeekStartStr(): string {
@@ -38,7 +39,8 @@ export function TrackerTab() {
   const [goalCountdown, setGoalCountdown] = useState<GoalCountdown | null>(null);
 
   const today = todayStr();
-  const currentMonthStr = getMonthStr(new Date());
+  // Use format() (local time) to stay consistent with getMonthStr
+  const currentMonthStr = format(new Date(), 'yyyy-MM');
   const canGoForwardMonth = trackerCalendarMonth < currentMonthStr;
 
   useEffect(() => {

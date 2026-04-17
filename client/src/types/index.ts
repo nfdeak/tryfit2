@@ -106,6 +106,13 @@ export interface OnboardingData {
   budgetCurrency: string;
   waterIntakeGoal: number;
   planDuration: number;
+  // Extended fields
+  countryCode?: string;
+  eatingWindowHours?: number;
+  fastingWindowHours?: number;
+  eatingStartTime?: string;
+  eatingEndTime?: string;
+  avoidNone?: boolean; // local UI state for opt-out
 }
 
 // Weight tracking types

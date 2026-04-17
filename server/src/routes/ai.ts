@@ -69,10 +69,12 @@ function buildUserPrompt(profile: any): string {
   const cuisines = JSON.parse(profile.cuisinePreferences);
   const allergies = JSON.parse(profile.allergies);
   const preferred = JSON.parse(profile.preferredIngredients);
-  const avoid = JSON.parse(profile.avoidIngredients);
+  const avoidRaw = JSON.parse(profile.avoidIngredients);
+  const avoid = avoidRaw.filter((a: string) => a !== '__none__');
   const health = JSON.parse(profile.healthConditions);
   const equipment = JSON.parse(profile.kitchenEquipment);
 
+  const profileAny = profile as any;
   const mealPref = profile.mealPreference?.toLowerCase() || '';
   const nonVegItems = ['chicken', 'fish', 'tuna', 'prawns', 'mutton'];
   const nonVeganItems = [...nonVegItems, 'eggs', 'paneer', 'whey protein', 'curd/yogurt', 'milk', 'cheese', 'butter', 'ghee', 'buttermilk'];
@@ -102,7 +104,7 @@ Apply these on top of their profile preferences. If an instruction
 conflicts with a dietary restriction or allergy, ignore the instruction
 and keep the restriction. Otherwise, honour these instructions precisely.` : '';
 
-  const planDays = (profile as any).planDuration === 14 ? 14 : 7;
+  const planDays = profileAny.planDuration === 14 ? 14 : 7;
   const dayRange = planDays === 14
     ? 'Generate exactly 14 days (Day 1 through Day 14). Week 2 must use completely different meals from Week 1.'
     : 'Generate exactly 7 days (Monday through Sunday).';
@@ -115,7 +117,9 @@ Goal: ${profile.primaryGoal}, Intensity: ${profile.dietIntensity}
 Activity: ${profile.activityLevel}, Diet: ${profile.mealPreference}
 Cuisines: ${cuisines.join(', ') || 'Any'}
 ${profile.mealsPerDay} meals/day: ${mealTypes.join(', ')}
-Window: ${profile.eatingWindow}, Wake: ${profile.wakeUpTime || '07:00'}, Sleep: ${profile.sleepTime || '23:00'}
+Window: ${(profile.eatingWindow === 'intermittent_fasting' || profile.eatingWindow === '16_8' || profile.eatingWindow === '18_6')
+    ? `Intermittent Fasting — eating ${profileAny.eatingWindowHours || (profile.eatingWindow === '18_6' ? 6 : 8)}h (${profileAny.eatingStartTime || '07:00'}–${profileAny.eatingEndTime || (profile.eatingWindow === '18_6' ? '13:00' : '15:00')}), fasting ${profileAny.fastingWindowHours || (profile.eatingWindow === '18_6' ? 18 : 16)}h. Schedule all meals within the eating window.`
+    : 'Standard (no fasting)'}, Wake: ${profile.wakeUpTime || '07:00'}, Sleep: ${profile.sleepTime || '23:00'}
 Allergies: ${allergies.length > 0 ? allergies.join(', ') : 'None'}
 Preferred: ${filteredPreferred.length > 0 ? filteredPreferred.join(', ') : 'Any'}
 Avoid: ${avoid.length > 0 ? avoid.join(', ') : 'None'}

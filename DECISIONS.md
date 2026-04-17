@@ -398,3 +398,63 @@ CREATE TABLE "water_logs" (
 ## Shared Date State
 
 `selectedDate` (ISO `YYYY-MM-DD`) in `appStore` is the single source of truth for both Meals and Tracker tabs. `navigateToMealsFromTracker(dayIndex, date)` sets it and switches tabs simultaneously so tapping a Tracker day → "View Meal Plan" opens Meals on that exact date.
+
+---
+
+# Bug Fixes & Feature Enhancements — 2026-04-17 (second drop)
+
+## Files Changed
+
+| File | Description |
+|---|---|
+| `client/src/components/WaterIntakeCard.tsx` | Rewritten as compact single-row dot grid |
+| `client/src/components/MacroAchievementCard.tsx` | New — daily macro consumed vs. target card |
+| `client/src/components/MealsTab.tsx` | Added MacroAchievementCard below water row |
+| `client/src/components/TrackerTab.tsx` | Fixed calendar nav timezone bug |
+| `client/src/components/Onboarding.tsx` | Country-linked city dropdown, numeric input fix, grouped cuisine, IF windows, mandatory steps 5+6 |
+| `client/src/data/onboarding.ts` | Added CUISINE_OPTIONS (grouped), COUNTRY_CODES map |
+| `client/src/types/index.ts` | Added IF window fields + avoidNone to OnboardingData |
+| `server/src/prisma/schema.prisma` | Added countryCode, eatingWindowHours, fastingWindowHours, eatingStartTime, eatingEndTime to UserProfile |
+| `server/src/prisma/migrations/20260417210000_if_windows_country_code/migration.sql` | SQL for new UserProfile columns |
+| `server/src/routes/profile.ts` | Save new IF/countryCode fields from POST body |
+| `server/src/routes/ai.ts` | Filter __none__ from avoidIngredients; include IF window details in prompt |
+
+## Migration Command
+
+```bash
+cd server && npx prisma migrate deploy --schema=src/prisma/schema.prisma
+```
+
+Applied migration: `20260417210000_if_windows_country_code`
+
+## __none__ Sentinel for avoidIngredients
+
+- **Frontend**: when user taps "I have no ingredients to avoid", `avoidIngredients` is set to `['__none__']` and `avoidNone: true` in local state.
+- **Backend profile save**: the array is saved as-is to `UserProfile.avoidIngredients`.
+- **AI prompt builder** (`routes/ai.ts`): `avoidRaw.filter(a => a !== '__none__')` strips the sentinel before building the Claude prompt, so Claude never sees it.
+- **Step 6 gating**: `canNext()` for step 6 checks `avoidIngredients.length > 0 || avoidNone === true` — both `['__none__']` and real selections satisfy this.
+
+## Eating Window Hours and End Time Calculation
+
+- `eatingWindowHours`: user-editable (4–20 hours), stored as `Int?` in `UserProfile`.
+- `fastingWindowHours`: computed as `24 - eatingWindowHours`, stored as `Int?`.
+- `eatingStartTime`: user-set time picker (HH:MM string), stored as `String?`.
+- `eatingEndTime`: computed as `eatingStartTime + eatingWindowHours`, stored as `String?`.
+- Calculation: `(startHour + eatingWindowHours) % 24`, zero-padded to HH:MM.
+- AI prompt includes: `"Eating Xh (HH:MM–HH:MM), fasting Yh. Schedule all meals within the eating window."`
+- Old `16_8`/`18_6` values are handled with backward-compat defaults in the prompt builder.
+
+## Calendar Navigation Race Condition Fix (TrackerTab)
+
+**Root cause**: `getMonthStr` used `date.toISOString().slice(0, 7)` which returns UTC time. `parseISO('YYYY-MM-01')` parses as LOCAL midnight (date-fns v2 behaviour for date-only strings). In UTC+ timezones (e.g. IST = UTC+5:30), `parseISO('2026-04-01')` = March 31 18:30 UTC, so `toISOString()` returned `'2026-03'` — making every ← click subtract TWO months instead of one.
+
+**Fix**: Replace `getMonthStr` with `format(date, 'yyyy-MM')` from date-fns (local time). Also fixed `todayStr()` in TrackerTab and `currentMonthStr` to use `format()` for consistency. This ensures `parseISO` and `getMonthStr` both use local time, making the arithmetic correct in all timezones.
+
+## City Data Limitations
+
+The `country-state-city` npm package uses GeoNames database which covers major cities globally. **Limitations**:
+- Smaller towns (<50k population) are often missing.
+- Some countries have incomplete state coverage.
+- Village-level settlements are not included.
+- **Fallback**: "City not listed? Type it manually" link switches to a free-text input so no user is blocked.
+- Countries not in `COUNTRY_CODES` map default to empty ISO code → free-text city input shown directly.
