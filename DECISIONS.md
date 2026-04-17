@@ -291,3 +291,110 @@ client/src/components/MealRow.tsx    — replacement-aware with ✏️ badge
 client/src/components/TrackerTab.tsx — fetches replacements, passes date prop
 .gitignore                          — updated
 ```
+
+---
+
+# 6-Feature Drop (2026-04-17)
+
+## Bug Fix: Post-Deploy Click Blocking
+
+**Root cause**: `SwipeableMealCard` spread both `swipe.handlers` and `longPress.handlers` onto the same div. `longPress.onTouchStart` overrides `swipe.onTouchStart`, creating a race condition that caused taps to be swallowed and never dispatched to child buttons.
+
+**Fix**: Rewrote `MealsTab.tsx` entirely, removing `SwipeableMealCard`. All meal interactions now use standard `<button onClick>` handlers with no touch/pointer event customisation.
+
+---
+
+## Feature 1 — Week Calendar Strip (MealsTab)
+
+- `mealsCalendarOffset` in `appStore` (0 = current week, -1 = previous, max -8).
+- Dates computed with `date-fns` (`startOfWeek(weekStartsOn:1)`, `addWeeks`, `addDays`).
+- Forward navigation disabled when `offset >= 0`.
+- `selectedDate` in `appStore` is shared between Meals and Tracker tabs.
+
+---
+
+## Feature 2 — Water Intake Logging
+
+**Schema**: `WaterLog` with `@@unique([userId, date])` — one row per user per calendar day.
+
+**Key decisions**:
+- Use ISO date string (not timestamp) as key to avoid timezone edge cases.
+- `POST /api/water` upserts using Prisma `@@unique` composite key.
+- Tap glass N → set count to N; tap same glass again → decrement to N-1.
+- Optimistic UI with revert on API failure.
+- State stored in `appStore.waterByDate[date]` (−1 sentinel = not yet loaded).
+
+---
+
+## Feature 3 — Tracker Tab Enhancements
+
+**Weekly + Monthly Adherence**: Two `AdherenceCard` components fed by `GET /api/tracker/summary?period=week` and `?period=month`. Fetched in `Promise.allSettled` to avoid serial waterfalls.
+
+**Goal Countdown** (`GET /api/tracker/goal-countdown`):
+- Latest `WeightLog` → current weight.
+- `weeklyLossRate`: low=0.3kg, moderate=0.5kg, high=0.75kg/week.
+- `weeksNeeded = (currentWeight - targetWeight) / weeklyLossRate`.
+- `goalDate = today + weeksNeeded weeks`.
+- Urgency threshold: `daysLeft <= 14`.
+
+**Month Calendar**: `trackerCalendarMonth` in `appStore` (YYYY-MM), defaults to current month. Forward navigation capped at current month.
+
+---
+
+## Feature 4 — Collapsible Tip Categories
+
+CSS `max-height` transition (0 → 2000px, 250ms ease-in-out) — no JS height measurement or library needed for static content. State persisted in `localStorage` under key `tipsExpandedSections`. Default: all collapsed except `prep-guide`.
+
+---
+
+## Feature 5 — Weekly Meal Prep Guide
+
+**Decision**: Embed prep guide generation inside the existing AI call (same JSON blob) — no extra API round-trip.
+
+**Storage**: `MealPlan.mealPrepGuide Json?` (JSONB). Null for pre-feature plans → fallback UI prompts user to regenerate.
+
+**API**: `GET /api/plan/meal-prep-guide` returns the active plan's `mealPrepGuide`.
+
+---
+
+## Feature 6 — Plan Duration Choice (7 or 14 days)
+
+**Schema**: `planDuration Int @default(7)` on both `UserProfile` (preference) and `MealPlan` (snapshot at generation time). Snapshot ensures historical plans render correctly if user later switches.
+
+**AI**: Separate `SYSTEM_PROMPT_7` / `SYSTEM_PROMPT_14`. 14-day prompt instructs Claude to maximise variety across two weeks. `maxTokens` = 14000 for 14-day plans vs 8000 for 7-day.
+
+**Validation**: `planData.days.length !== expectedDays` throws — prevents partial plans from being stored.
+
+**Plan day index**: `weekData` ordered by `dayIndex` (0-indexed). For 14-day plans, days 0–13 map to dates starting from `weekStartDate`.
+
+**PATCH `/api/profile/plan-duration`**: Lightweight single-field update in `ProfileTab` so user can change preference without re-POSTing full profile.
+
+---
+
+## Database Migration (20260417200000_water_prep_plan_duration)
+
+Applied with `npx prisma migrate deploy --schema=src/prisma/schema.prisma`.
+
+```sql
+ALTER TABLE "MealPlan" ADD COLUMN "planDuration" INTEGER NOT NULL DEFAULT 7;
+ALTER TABLE "MealPlan" ADD COLUMN "mealPrepGuide" JSONB;
+ALTER TABLE "UserProfile" ADD COLUMN "planDuration" INTEGER NOT NULL DEFAULT 7;
+CREATE TABLE "water_logs" (
+  id TEXT PRIMARY KEY,
+  "userId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  glasses INTEGER NOT NULL,
+  "goalGlasses" INTEGER NOT NULL,
+  "loggedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ,
+  UNIQUE("userId", date)
+);
+```
+
+**Breaking changes**: None. All new columns have DEFAULT values; existing rows are unaffected.
+
+---
+
+## Shared Date State
+
+`selectedDate` (ISO `YYYY-MM-DD`) in `appStore` is the single source of truth for both Meals and Tracker tabs. `navigateToMealsFromTracker(dayIndex, date)` sets it and switches tabs simultaneously so tapping a Tracker day → "View Meal Plan" opens Meals on that exact date.
