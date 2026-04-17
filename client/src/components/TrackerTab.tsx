@@ -7,6 +7,7 @@ import { useTracker } from '../hooks/useTracker';
 import { TrackerSummary, GoalCountdown } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 import { ErrorBoundary } from './ErrorBoundary';
+import { MonthlyCalorieChart } from './MonthlyCalorieChart';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 // Use format() (local time) not toISOString() (UTC) to avoid timezone off-by-one
@@ -182,6 +183,11 @@ export function TrackerTab() {
           )}
         </div>
       )}
+
+      {/* ── Monthly Calorie Chart ──────────────────────────────────────── */}
+      <ErrorBoundary fallback={<div />}>
+        <MonthlyCalorieChart />
+      </ErrorBoundary>
 
       {/* ── Month Calendar ─────────────────────────────────────────────── */}
       <div>

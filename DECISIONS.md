@@ -458,3 +458,56 @@ The `country-state-city` npm package uses GeoNames database which covers major c
 - Village-level settlements are not included.
 - **Fallback**: "City not listed? Type it manually" link switches to a free-text input so no user is blocked.
 - Countries not in `COUNTRY_CODES` map default to empty ISO code → free-text city input shown directly.
+
+---
+
+# Monthly Calorie Chart + Circular Macro Rings (2026-04-17)
+
+## Files Created / Modified
+
+| File | Action | Description |
+|---|---|---|
+| `client/src/components/MonthlyCalorieChart.tsx` | Created | Monthly calorie bar chart with cumulative progress bar and insight line |
+| `client/src/components/CircularMacroRing.tsx` | Created | Reusable SVG circular ring component + MACRO_COLORS |
+| `client/src/components/MacroAchievementCard.tsx` | Modified | Replaced horizontal bars with circular ring grid |
+| `client/src/components/TrackerTab.tsx` | Modified | Added MonthlyCalorieChart below GoalCountdown, above calendar |
+| `server/src/routes/tracker.ts` | Modified | Added GET /api/tracker/monthly-calories endpoint |
+
+## Monthly Calorie Delta Calculation (Partial Logging)
+
+For each day that falls within `[planStartDate, today]` in the requested month:
+- For each meal slot `0..mealsPerDay-1`:
+  - If a `MealReplacement` exists for `(userId, date, mealIndex)`: use `replacement.calories` (replacements are explicitly logged, so they always count as consumed)
+  - Else if `MealLog.eaten = true` for that slot: look up `planDay.meals[mealIndex].calories`
+  - Else: 0
+- Days with no logged meals contribute `0` consumed calories but still count against the cumulative target (i.e., uneaten plan days show as deficit)
+
+This matches the same logic used in `MacroAchievementCard` on the client.
+
+## Plan Day Index Derivation (Modulo Logic)
+
+```typescript
+const daysSinceStart = Math.floor((dateMs - planStartMs) / 86400000);
+const planDayIndex   = daysSinceStart % planDuration;
+```
+
+- For a 7-day plan: day 0–6 maps to days 0–6, day 7 wraps back to day 0, etc.
+- For a 14-day plan: days 0–13 map directly; day 14 wraps to day 0.
+- `planDuration` is read from `UserProfile.planDuration` (default 7).
+- Handles rolling weeks correctly — no hard-coded calendar week assumption.
+
+## Circular Ring SVG — Over-100% Visual Cap
+
+```typescript
+const pct = target > 0 ? Math.min(consumed / target, 1) : 0;
+```
+
+- `pct` is capped at 1.0 (100%) for the `strokeDashoffset` calculation, so the ring never overflows its track.
+- `isOver = consumed > target` uses the uncapped value to detect over-target state.
+- When over: ring colour changes to `#DC2626` (red) and the percentage still reads the capped value (100%).
+- The raw consumed/target numbers shown below the ring are always actual values, so the user sees the true overage.
+- Near-target (90–100%): ring colour transitions to `#F0B429` (amber) as a warning.
+
+## Monthly Chart ↔ Calendar Month Sync
+
+`MonthlyCalorieChart` reads `trackerCalendarMonth` directly from `useAppStore()`. When the user navigates the Tracker calendar with the `←`/`→` buttons, `setTrackerCalendarMonth` is called in `appStore`, which updates the Zustand state. The chart's `useEffect` depends on `trackerCalendarMonth` and re-fetches `GET /api/tracker/monthly-calories?month=YYYY-MM` whenever it changes. No prop-drilling or event bus needed — both components share the same atom of state.

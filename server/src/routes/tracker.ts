@@ -2,6 +2,18 @@ import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function localDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function todayLocal(): string {
+  return localDateStr(new Date());
+}
+
 const router = Router();
 
 function getMondayOfCurrentWeek(): Date {
@@ -213,6 +225,137 @@ router.get('/week', requireAuth, async (req: AuthRequest, res: Response): Promis
   } catch (err) {
     console.error('Tracker week error:', err instanceof Error ? err.message : 'unknown');
     res.status(500).json({ error: 'server_error', message: 'Failed to load tracker week.' });
+  }
+});
+
+// GET /api/tracker/monthly-calories?month=YYYY-MM
+router.get('/monthly-calories', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const today = todayLocal();
+    const rawMonth = (req.query.month as string) || today.slice(0, 7);
+    // Validate format
+    const monthMatch = rawMonth.match(/^(\d{4})-(\d{2})$/);
+    if (!monthMatch) { res.status(400).json({ error: 'month must be YYYY-MM' }); return; }
+
+    const year = parseInt(monthMatch[1], 10);
+    const mon  = parseInt(monthMatch[2], 10);     // 1-based
+
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
+    if (!profile) { res.status(404).json({ error: 'Profile not found' }); return; }
+
+    const targetCalories = profile.targetCalories;
+    const planDuration   = (profile as any).planDuration || 7;
+    const mealsPerDay    = profile.mealsPerDay || 4;
+
+    // Get active meal plan with all days
+    const mealPlan = await prisma.mealPlan.findFirst({
+      where: { userId, isActive: true },
+      include: { days: true },
+      orderBy: { generatedAt: 'desc' },
+    });
+
+    const emptyResponse = {
+      month: rawMonth, planDaysElapsed: 0, totalPlanDaysInMonth: 0,
+      targetCalories, totalTargetKcal: 0, totalConsumedKcal: 0,
+      deltaKcal: 0, deltaPct: 0, dailyAvgConsumed: 0, dailyData: [],
+    };
+    if (!mealPlan) { res.json(emptyResponse); return; }
+
+    // Plan start date (stored as UTC midnight in DB — treat as local date string)
+    const planStartLocal = localDateStr(new Date(mealPlan.weekStartDate));
+
+    // Build planDay meals lookup: dayIndex → Meal[]
+    const planDaysMap = new Map<number, any[]>();
+    for (const pd of mealPlan.days) {
+      try { planDaysMap.set(pd.dayIndex, JSON.parse(pd.meals || '[]')); } catch { planDaysMap.set(pd.dayIndex, []); }
+    }
+
+    // All calendar dates for the requested month
+    const daysInMonth = new Date(year, mon, 0).getDate();
+    const allDates = Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(year, mon - 1, i + 1);
+      return localDateStr(d);
+    });
+
+    // Only consider dates in [planStart, today]
+    const validDates = allDates.filter(d => d >= planStartLocal && d <= today);
+
+    if (validDates.length === 0) { res.json(emptyResponse); return; }
+
+    // Fetch all MealLog and MealReplacement entries for these dates
+    const [logs, replacements] = await Promise.all([
+      prisma.mealLog.findMany({ where: { userId, date: { in: validDates } } }),
+      prisma.mealReplacement.findMany({ where: { userId, date: { in: validDates } } }),
+    ]);
+
+    // Index by date
+    const logsByDate: Record<string, typeof logs> = {};
+    logs.forEach(l => { (logsByDate[l.date] ??= []).push(l); });
+    const repsByDate: Record<string, typeof replacements> = {};
+    replacements.forEach(r => { (repsByDate[r.date] ??= []).push(r); });
+
+    let totalTargetKcal   = 0;
+    let totalConsumedKcal = 0;
+    const dailyData: any[] = [];
+
+    for (const date of validDates) {
+      // Derive planDayIndex via modulo (handles both 7 and 14-day plans, and rolling weeks)
+      const planStartMs  = new Date(planStartLocal + 'T00:00:00Z').getTime();
+      const dateMs       = new Date(date + 'T00:00:00Z').getTime();
+      const daysSinceStart = Math.max(0, Math.floor((dateMs - planStartMs) / 86400000));
+      const planDayIndex   = daysSinceStart % planDuration;
+
+      const planMeals  = planDaysMap.get(planDayIndex) || [];
+      const dateLogs   = logsByDate[date] || [];
+      const dateReps   = repsByDate[date] || [];
+      const repByMeal  = new Map(dateReps.map(r => [r.mealIndex, r]));
+
+      let consumed = 0;
+      for (let mealIdx = 0; mealIdx < mealsPerDay; mealIdx++) {
+        const rep = repByMeal.get(mealIdx);
+        if (rep) {
+          // A replacement was logged — count its calories as consumed
+          consumed += rep.calories;
+        } else {
+          const log = dateLogs.find(l => l.mealIndex === mealIdx && l.eaten);
+          if (log) {
+            const planMeal = planMeals[mealIdx];
+            consumed += planMeal?.calories ?? 0;
+          }
+        }
+      }
+
+      const delta = consumed - targetCalories;
+      totalTargetKcal   += targetCalories;
+      totalConsumedKcal += consumed;
+
+      const dayNum = parseInt(date.slice(8), 10);
+      const hasData = dateLogs.some(l => l.eaten) || dateReps.length > 0;
+
+      dailyData.push({ day: dayNum, date, delta, consumed, target: targetCalories, hasData });
+    }
+
+    const planDaysElapsed    = validDates.length;
+    const deltaKcal          = totalConsumedKcal - totalTargetKcal;
+    const deltaPct           = totalTargetKcal > 0 ? (deltaKcal / totalTargetKcal) * 100 : 0;
+    const dailyAvgConsumed   = planDaysElapsed > 0 ? totalConsumedKcal / planDaysElapsed : 0;
+
+    res.json({
+      month: rawMonth,
+      planDaysElapsed,
+      totalPlanDaysInMonth: daysInMonth,
+      targetCalories,
+      totalTargetKcal,
+      totalConsumedKcal: Math.round(totalConsumedKcal),
+      deltaKcal: Math.round(deltaKcal),
+      deltaPct: Math.round(deltaPct * 10) / 10,
+      dailyAvgConsumed: Math.round(dailyAvgConsumed),
+      dailyData,
+    });
+  } catch (err) {
+    console.error('Monthly calories error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error' });
   }
 });
 
