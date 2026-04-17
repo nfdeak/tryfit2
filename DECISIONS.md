@@ -161,3 +161,133 @@ vercel --prod
 ### Database Sync
 
 No schema changes were made to the data models. The only schema change was adding `binaryTargets` to the generator block, which only affects client generation (not the database). No migrations needed.
+
+---
+
+## 17. Meal Replacer Feature (2026-04-17)
+
+### Overview
+The Meal Replacer lets users swap any planned meal with what they actually ate,
+tracking real macros against the plan. Three food data sources cascade:
+Open Food Facts (free, 3M+ products) → USDA FoodData Central → Claude AI fallback.
+
+### New Database Models
+
+| Model | Purpose | Key constraint |
+|---|---|---|
+| `MealReplacement` | One replacement per meal slot per day | `@@unique([userId, date, mealIndex])` — upsert semantics |
+| `FoodSearchCache` | 7-day TTL cache for combined search results | `@@unique([query, source])` |
+| `RecentFoodLog` | Last 10 foods the user searched/logged | Indexed by `[userId, usedAt]` |
+
+### Migration
+```bash
+# Already applied to Neon production on 2026-04-17
+cd server
+npx prisma migrate deploy --schema=src/prisma/schema.prisma
+```
+
+### New Environment Variables
+
+| Variable | Where | Value |
+|---|---|---|
+| `USDA_API_KEY` | Vercel env vars (all environments) | `jR8QDTnz7KeQWGEgwQysUNzIBSBC6cY0OZ4KPMUk` |
+| `AI_FOOD_ESTIMATE_DAILY_LIMIT` | Vercel env vars | `20` (default if unset) |
+
+> **Action required**: Add these two env vars in the Vercel dashboard under
+> Project Settings → Environment Variables for Production, Preview, Development.
+
+### Food Data Sources
+
+1. **Open Food Facts** (`openFoodFactsService.ts`) — Free, no API key, 8s timeout, up to 6 results, handles kJ→kcal conversion
+2. **USDA FoodData Central** (`usdaService.ts`) — Free with API key, 8s timeout, nutrient IDs mapped, graceful fallback if key not set
+3. **Claude AI** (`aiFoodService.ts`) — Fallback when OFF+USDA return <3 results; 20 requests/user/day rate limit; model: `claude-sonnet-4-20250514`
+
+### Search Strategy (`food.ts /api/food/search`)
+1. Check `FoodSearchCache` for unexpired combined results
+2. `Promise.allSettled([OFF, USDA])` — parallel, either can fail gracefully
+3. Deduplicate by normalized food name
+4. If <3 results → call Claude AI for additional estimates
+5. Cache combined results for 7 days
+6. Passive cleanup deletes expired cache entries on each request
+
+### Interaction Model
+
+| Gesture | Action |
+|---|---|
+| Swipe left on meal card | Reveals terracotta "Replace Meal" action panel |
+| Long press (mobile) | Context menu: Replace / Mark eaten |
+| Right-click (desktop) | Same context menu |
+
+### Component Architecture
+```
+MealsTab
+├── SwipeableMealCard (per meal)
+│   ├── ReplacedMealCard (if replaced — amber styling, undo button)
+│   └── Normal meal card (if not)
+└── MealReplacerSheet (bottom sheet modal with drag-to-dismiss)
+    ├── MealReplacerSearch (screen 1: quick picks, recents, search)
+    ├── MealReplacerResults (screen 2: live results with loading)
+    ├── MealReplacerQuantity (screen 3: serving, quantity, live macros)
+    └── MealReplacerAI (screen 4: natural language AI estimator)
+```
+
+### TrackerTab Integration
+- `MealRow` shows ✏️ icon and actual food name for replaced meals
+- Amber styling distinguishes replaced meals from normal ones
+- Day totals in MealsTab use replacement macros when present
+
+### State Management
+- `mealReplacerStore.ts` — Zustand store with replacements keyed by `"YYYY-MM-DD-mealIndex"`
+- Optimistic undo (instant UI update, revert on API failure)
+- `fetchReplacementsForWeek()` loads all replacements on mount
+
+### API Routes
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/food/search?q=&limit=` | GET | Combined multi-source search with caching |
+| `/api/food/ai-estimate` | POST | Natural language AI macro estimation (rate-limited) |
+| `/api/food/recent` | GET | Last 10 recent food logs for quick picks |
+| `/api/meals/replace` | POST | Upsert replacement, auto-marks eaten, logs to recent |
+| `/api/meals/replacements?date=` | GET | Replacements for a specific date |
+| `/api/meals/replacements/week` | GET | All replacements for current week |
+| `/api/meals/replace/:id` | DELETE | Delete replacement with ownership check |
+
+### Accuracy Limitations
+- Open Food Facts data is community-contributed; some entries may be inaccurate
+- USDA provides lab-tested data but mostly US-centric foods
+- AI estimates are approximations; marked with ✨ and muted styling in the UI
+- All AI-estimated foods set `isAiEstimate: true` in the database
+
+### Files Created (19)
+```
+server/src/services/foodTypes.ts
+server/src/services/openFoodFactsService.ts
+server/src/services/usdaService.ts
+server/src/services/aiFoodService.ts
+server/src/routes/food.ts
+server/src/routes/meals.ts
+server/src/prisma/migrations/20260417120000_add_meal_replacer/migration.sql
+client/src/hooks/useSwipeGesture.ts
+client/src/hooks/useLongPress.ts
+client/src/hooks/useFoodSearch.ts
+client/src/store/mealReplacerStore.ts
+client/src/components/MealReplacerSheet.tsx
+client/src/components/MealReplacerSearch.tsx
+client/src/components/MealReplacerResults.tsx
+client/src/components/MealReplacerQuantity.tsx
+client/src/components/MealReplacerAI.tsx
+client/src/components/FoodResultCard.tsx
+client/src/components/ReplacedMealCard.tsx
+```
+
+### Files Modified (7)
+```
+server/src/prisma/schema.prisma     — added 3 models + User relations
+server/src/app.ts                   — registered food + meals routes
+client/src/types/index.ts           — added meal replacer types
+client/src/components/MealsTab.tsx   — full rewrite with swipe/replace/context
+client/src/components/MealRow.tsx    — replacement-aware with ✏️ badge
+client/src/components/TrackerTab.tsx — fetches replacements, passes date prop
+.gitignore                          — updated
+```
