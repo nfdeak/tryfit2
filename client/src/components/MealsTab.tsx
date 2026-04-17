@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { format, parseISO, addWeeks, startOfWeek, addDays } from 'date-fns';
 import { useAppStore } from '../store/appStore';
 import { useMealReplacerStore } from '../store/mealReplacerStore';
@@ -60,26 +60,6 @@ export function MealsTab() {
   const planDay = isPlanDate ? planDaysFromPlan[planDayIdx] || planDays[planDayIdx] : null;
   const meals: Meal[] = planDay?.meals || [];
   const dayTrackerData = weekData[planDayIdx];
-
-  // Compute day totals with replacements
-  const getDayTotals = useCallback(() => {
-    return meals.reduce(
-      (acc, meal, mealIdx) => {
-        const repKey = `${selectedDate}-${mealIdx}`;
-        const rep = replacements[repKey];
-        return {
-          calories: acc.calories + (rep ? rep.calories : meal.calories || 0),
-          protein: acc.protein + (rep ? rep.proteinG : meal.protein || 0),
-          carbs: acc.carbs + (rep ? rep.carbsG : meal.carbs || 0),
-          fat: acc.fat + (rep ? rep.fatG : meal.fat || 0),
-          fibre: acc.fibre + (rep ? rep.fibreG : meal.fibre ?? 0),
-        };
-      },
-      { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 }
-    );
-  }, [meals, replacements, selectedDate]);
-
-  const totals = getDayTotals();
 
   const getMealEaten = (mealIndex: number) => dayTrackerData?.meals[mealIndex]?.eaten ?? false;
   const handleToggle = (mealIndex: number) => {
@@ -221,33 +201,6 @@ export function MealsTab() {
 
         {isPlanDate && (
           <>
-            {/* Day macro totals */}
-            <div className="bg-surface rounded-2xl p-3.5 border border-border card-glow">
-              <div className="flex justify-between items-center">
-                <div className="text-center flex-1">
-                  <p className="text-success font-bold text-sm font-mono">{Math.round(totals.protein)}g</p>
-                  <p className="text-secondary text-[10px] font-sans">Protein</p>
-                </div>
-                <div className="text-center flex-1">
-                  <p className="text-accent font-bold text-sm font-mono">{Math.round(totals.carbs)}g</p>
-                  <p className="text-secondary text-[10px] font-sans">Carbs</p>
-                </div>
-                <div className="text-center flex-1">
-                  <p className="text-violet font-bold text-sm font-mono">{Math.round(totals.fat)}g</p>
-                  <p className="text-secondary text-[10px] font-sans">Fat</p>
-                </div>
-                <div className="text-center flex-1">
-                  <p className="text-fibre font-bold text-sm font-mono">{Math.round(totals.fibre)}g</p>
-                  <p className="text-secondary text-[10px] font-sans">Fibre</p>
-                </div>
-                <div className="w-px h-6 bg-border" />
-                <div className="text-center flex-1">
-                  <p className="text-primary font-bold text-base font-mono">{Math.round(totals.calories)}</p>
-                  <p className="text-secondary text-[10px] font-sans">kcal</p>
-                </div>
-              </div>
-            </div>
-
             {/* Water intake */}
             <WaterIntakeCard date={selectedDate} />
 

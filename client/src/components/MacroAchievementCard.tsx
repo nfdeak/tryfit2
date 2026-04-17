@@ -85,71 +85,69 @@ export function MacroAchievementCard({
         </div>
       </div>
 
-      {noMealsEaten ? (
-        <p className="text-xs text-dimmed font-sans text-center py-4">
-          Log meals to track your macros
-        </p>
-      ) : (
-        <>
-          {/* Row 1: Calories, Protein, Carbs */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            <CircularMacroRing
-              label="Calories"
-              consumed={consumed.calories}
-              target={targets.calories}
-              unit="kcal"
-              color={MACRO_COLORS.calories}
-              size={88}
-              strokeWidth={8}
-            />
-            <CircularMacroRing
-              label="Protein"
-              consumed={consumed.protein}
-              target={targets.protein}
-              unit="g"
-              color={MACRO_COLORS.protein}
-              size={88}
-              strokeWidth={8}
-            />
-            <CircularMacroRing
-              label="Carbs"
-              consumed={consumed.carbs}
-              target={targets.carbs}
-              unit="g"
-              color={MACRO_COLORS.carbs}
-              size={88}
-              strokeWidth={8}
-            />
-          </div>
+      {/* Row 1: Calories, Protein, Carbs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <CircularMacroRing
+          label="Calories"
+          consumed={consumed.calories}
+          target={targets.calories}
+          unit="kcal"
+          color={MACRO_COLORS.calories}
+          size={88}
+          strokeWidth={8}
+        />
+        <CircularMacroRing
+          label="Protein"
+          consumed={consumed.protein}
+          target={targets.protein}
+          unit="g"
+          color={MACRO_COLORS.protein}
+          size={88}
+          strokeWidth={8}
+        />
+        <CircularMacroRing
+          label="Carbs"
+          consumed={consumed.carbs}
+          target={targets.carbs}
+          unit="g"
+          color={MACRO_COLORS.carbs}
+          size={88}
+          strokeWidth={8}
+        />
+      </div>
 
-          {/* Row 2: Fat, Fibre — centred, slightly larger */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: 8,
-            marginTop: 12,
-            padding: '0 20px',
-          }}>
-            <CircularMacroRing
-              label="Fat"
-              consumed={consumed.fat}
-              target={targets.fat}
-              unit="g"
-              color={MACRO_COLORS.fat}
-              size={96}
-              strokeWidth={8}
-            />
-            <CircularMacroRing
-              label="Fibre"
-              consumed={consumed.fibre}
-              target={targets.fibre}
-              unit="g"
-              color={MACRO_COLORS.fibre}
-              size={96}
-              strokeWidth={8}
-            />
-          </div>
-        </>
+      {/* Row 2: Fat, Fibre — centred, slightly larger */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 8,
+        marginTop: 12,
+        padding: '0 20px',
+      }}>
+        <CircularMacroRing
+          label="Fat"
+          consumed={consumed.fat}
+          target={targets.fat}
+          unit="g"
+          color={MACRO_COLORS.fat}
+          size={96}
+          strokeWidth={8}
+        />
+        <CircularMacroRing
+          label="Fibre"
+          consumed={consumed.fibre}
+          target={targets.fibre}
+          unit="g"
+          color={MACRO_COLORS.fibre}
+          size={96}
+          strokeWidth={8}
+        />
+      </div>
+
+      {noMealsEaten && (
+        <p className="text-[11px] text-dimmed font-sans text-center mt-3">
+          Log meals above to track your progress
+        </p>
       )}
     </div>
   );
