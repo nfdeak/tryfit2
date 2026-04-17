@@ -14,10 +14,10 @@ function getMondayOfCurrentWeek(): Date {
   return monday;
 }
 
-function getPlanDates(): string[] {
+function getPlanDates(planDuration = 7): string[] {
   const monday = getMondayOfCurrentWeek();
   const dates: string[] = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < planDuration; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     dates.push(d.toISOString().split('T')[0]);
@@ -25,16 +25,138 @@ function getPlanDates(): string[] {
   return dates;
 }
 
+function getWeekDates(weekStartDate: string): string[] {
+  const start = new Date(weekStartDate + 'T00:00:00Z');
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    return d.toISOString().split('T')[0];
+  });
+}
+
+function getMonthDates(month: string): string[] {
+  // month = "YYYY-MM"
+  const [year, mon] = month.split('-').map(Number);
+  const daysInMonth = new Date(year, mon, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(year, mon - 1, i + 1);
+    return d.toISOString().split('T')[0];
+  });
+}
+
+function weeklyLossRate(intensity: string): number {
+  if (intensity === 'low') return 0.3;
+  if (intensity === 'high') return 0.75;
+  return 0.5; // moderate
+}
+
 async function getMealsPerDay(userId: string): Promise<number> {
   const profile = await prisma.userProfile.findUnique({ where: { userId } });
   return profile?.mealsPerDay || 4;
 }
 
+// GET /api/tracker/summary?period=week&weekStart=YYYY-MM-DD
+// GET /api/tracker/summary?period=month&month=YYYY-MM
+router.get('/summary', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const period = req.query.period as string;
+    const mealsPerDay = await getMealsPerDay(userId);
+
+    if (period === 'week') {
+      const weekStart = req.query.weekStart as string;
+      if (!weekStart) { res.status(400).json({ error: 'weekStart required' }); return; }
+      const dates = getWeekDates(weekStart);
+      const logs = await prisma.mealLog.findMany({
+        where: { userId, date: { in: dates }, eaten: true }
+      });
+      const total = 7 * mealsPerDay;
+      const eaten = logs.length;
+      res.json({ eaten, total, adherencePct: total > 0 ? Math.round((eaten / total) * 100) : 0 });
+      return;
+    }
+
+    if (period === 'month') {
+      const month = req.query.month as string; // "YYYY-MM"
+      if (!month) { res.status(400).json({ error: 'month required' }); return; }
+      const dates = getMonthDates(month);
+      // Get plan dates to know which days are plan days
+      const planDates = getPlanDates();
+      const planDatesInMonth = dates.filter(d => planDates.includes(d));
+      const total = planDatesInMonth.length * mealsPerDay;
+      const logs = await prisma.mealLog.findMany({
+        where: { userId, date: { in: planDatesInMonth }, eaten: true }
+      });
+      const eaten = logs.length;
+      res.json({ eaten, total, adherencePct: total > 0 ? Math.round((eaten / total) * 100) : 0 });
+      return;
+    }
+
+    res.status(400).json({ error: 'period must be week or month' });
+  } catch (err) {
+    console.error('Tracker summary error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// GET /api/tracker/goal-countdown
+router.get('/goal-countdown', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      res.status(404).json({ error: 'Profile not found' });
+      return;
+    }
+
+    // Use latest weight log if available, otherwise profile's current weight
+    const latestLog = await prisma.weightLog.findFirst({
+      where: { userId },
+      orderBy: { loggedAt: 'desc' }
+    });
+    const currentWeight = latestLog?.weightKg ?? profile.weightKg;
+    const targetWeight = profile.targetWeightKg;
+    const weightToLose = currentWeight - targetWeight;
+
+    if (weightToLose <= 0) {
+      res.json({
+        goalDate: new Date().toISOString().split('T')[0],
+        daysLeft: 0,
+        weeksLeft: 0,
+        displayText: "You've reached your goal weight! 🎉",
+        isUrgent: false
+      });
+      return;
+    }
+
+    const rate = weeklyLossRate(profile.dietIntensity);
+    const weeksNeeded = Math.ceil(weightToLose / rate);
+    const goalDate = new Date();
+    goalDate.setDate(goalDate.getDate() + weeksNeeded * 7);
+    const goalDateStr = goalDate.toISOString().split('T')[0];
+    const daysLeft = weeksNeeded * 7;
+
+    let displayText: string;
+    const isUrgent = daysLeft < 7;
+    if (daysLeft <= 0) displayText = "You've reached your goal date!";
+    else if (daysLeft < 7) displayText = `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
+    else if (daysLeft < 14) displayText = `${Math.ceil(daysLeft / 7)} week left`;
+    else displayText = `${Math.ceil(daysLeft / 7)} weeks left`;
+
+    res.json({ goalDate: goalDateStr, daysLeft, weeksLeft: weeksNeeded, displayText, isUrgent, targetWeight, currentWeight });
+  } catch (err) {
+    console.error('Goal countdown error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // GET /api/tracker/stats
 router.get('/stats', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
-    const planDates = getPlanDates();
+    const profile = await prisma.userProfile.findUnique({ where: { userId }, select: { planDuration: true } });
+    const planDuration = profile?.planDuration || 7;
+    const planDates = getPlanDates(planDuration);
     const mealsPerDay = await getMealsPerDay(userId);
     const totalMeals = 7 * mealsPerDay;
 
@@ -69,7 +191,9 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res: Response): Promi
 router.get('/week', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
-    const planDates = getPlanDates();
+    const profile = await prisma.userProfile.findUnique({ where: { userId }, select: { planDuration: true } });
+    const planDuration = profile?.planDuration || 7;
+    const planDates = getPlanDates(planDuration);
     const mealsPerDay = await getMealsPerDay(userId);
 
     const logs = await prisma.mealLog.findMany({
@@ -85,7 +209,7 @@ router.get('/week', requireAuth, async (req: AuthRequest, res: Response): Promis
       return { date, dayIndex, meals };
     });
 
-    res.json({ week, weekStart: planDates[0], mealsPerDay });
+    res.json({ week, weekStart: planDates[0], mealsPerDay, planDuration });
   } catch (err) {
     console.error('Tracker week error:', err instanceof Error ? err.message : 'unknown');
     res.status(500).json({ error: 'server_error', message: 'Failed to load tracker week.' });

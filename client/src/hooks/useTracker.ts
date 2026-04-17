@@ -5,7 +5,7 @@ import { useAppStore } from '../store/appStore';
 export function useTracker() {
   const {
     weekData, stats, weekStart,
-    setWeekData, setStats, setWeekStart, toggleMealEaten, setMealsPerDay
+    setWeekData, setStats, setWeekStart, toggleMealEaten, setMealsPerDay, setPlanDuration
   } = useAppStore();
 
   const loadWeekData = useCallback(async () => {
@@ -28,6 +28,9 @@ export function useTracker() {
         setStats(stats);
         if (stats.mealsPerDay) {
           setMealsPerDay(stats.mealsPerDay);
+        }
+        if ((weekRes.data as any).planDuration) {
+          setPlanDuration((weekRes.data as any).planDuration);
         }
       } else {
         setStats({ eaten: 0, total: 0, adherence: 0, streak: 0, remaining: 0 });

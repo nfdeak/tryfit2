@@ -11,6 +11,7 @@ import aiRoutes from './routes/ai';
 import weightRoutes from './routes/weight';
 import foodRoutes from './routes/food';
 import mealsRoutes from './routes/meals';
+import waterRoutes from './routes/water';
 
 // ---------------------------------------------------------------------------
 // Startup env-var check — logs missing variables so debugging is instant.
@@ -101,6 +102,7 @@ export function createApp(): Express {
   app.use('/api/weight', weightRoutes);
   app.use('/api/food', foodRoutes);
   app.use('/api/meals', mealsRoutes);
+  app.use('/api/water', waterRoutes);
 
   // 404 for unknown /api routes
   app.use('/api', (_req: Request, res: Response) => {

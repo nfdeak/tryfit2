@@ -23,6 +23,7 @@ export function ProfileTab() {
   const [showBanner, setShowBanner] = useState(false);
   const [error, setError] = useState('');
   const [mealInstructions, setMealInstructions] = useState('');
+  const [planDuration, setPlanDuration] = useState<7 | 14>(7);
   const instructionsRef = useRef('');
   const { fetchLogs, fetchProjection } = useWeightStore();
 
@@ -34,6 +35,8 @@ export function ProfileTab() {
           const saved = res.data.profile.mealPlanCustomInstructions || '';
           setMealInstructions(saved);
           instructionsRef.current = saved;
+          if (res.data.profile.planDuration === 14) setPlanDuration(14);
+          else setPlanDuration(7);
         }
       })
       .catch(() => {});
@@ -45,6 +48,15 @@ export function ProfileTab() {
   const handleInstructionsChange = (text: string) => {
     setMealInstructions(text);
     instructionsRef.current = text;
+  };
+
+  const handlePlanDurationChange = async (duration: 7 | 14) => {
+    setPlanDuration(duration);
+    try {
+      await axios.patch('/api/profile/plan-duration', { planDuration: duration }, { withCredentials: true });
+    } catch {
+      // silent — will be sent with next regenerate call
+    }
   };
 
   const handleRegenerateClick = () => {
@@ -142,7 +154,7 @@ export function ProfileTab() {
           </div>
           <h3 className="font-display text-2xl font-bold text-primary mb-2">Plan Ready!</h3>
           <p className="text-secondary font-sans text-sm leading-relaxed mb-6">
-            Your personalised 7-day meal plan has been generated successfully. Head over to the Meals tab to view your new diet plan.
+            Your personalised {planDuration}-day meal plan has been generated successfully. Head over to the Meals tab to view your new diet plan.
           </p>
           <button
             onClick={() => {
@@ -239,6 +251,31 @@ export function ProfileTab() {
         </>
       )}
 
+      {/* Plan Duration Selector */}
+      <div className="bg-surface rounded-2xl border border-border p-4 card-glow">
+        <h3 className="font-sans font-semibold text-primary text-sm mb-3">Plan Duration</h3>
+        <p className="text-xs text-secondary font-sans mb-3">Changes take effect on your next regenerated plan.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {([7, 14] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => handlePlanDurationChange(d)}
+              className={`relative text-left px-4 py-3 rounded-xl text-sm font-sans transition-all ${
+                planDuration === d ? 'bg-elevated text-primary border border-accent/40' : 'bg-surface border border-border text-secondary'
+              }`}
+            >
+              {d === 14 && (
+                <span className="absolute -top-2 right-2 bg-accent text-white text-[9px] font-bold px-2 py-0.5 rounded-full">⭐ Recommended</span>
+              )}
+              <span className="font-semibold block">{d}-Day Plan</span>
+              <span className={`text-xs mt-0.5 block ${planDuration === d ? 'text-secondary' : 'text-dimmed'}`}>
+                {d === 7 ? 'One week of meals' : 'Maximum variety'}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Meal Plan Customiser + Regenerate */}
       <MealPlanCustomiser
         initialValue={mealInstructions}
@@ -275,7 +312,7 @@ export function ProfileTab() {
               <>
                 <h3 className="font-display font-bold text-primary text-lg mb-2">Regenerate Plan?</h3>
                 <p className="text-sm text-secondary font-sans mb-5">
-                  This will create a brand new 7-day plan based on your profile. Your current tracking data will be reset.
+                  This will create a brand new {planDuration}-day plan based on your profile. Your current tracking data will be reset.
                 </p>
               </>
             )}

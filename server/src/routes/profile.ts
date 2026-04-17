@@ -81,6 +81,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
       weeklyBudget: data.weeklyBudget || null,
       budgetCurrency: data.budgetCurrency || 'INR',
       waterIntakeGoal: data.waterIntakeGoal || 8,
+      planDuration: data.planDuration === 14 ? 14 : 7,
       ...targets
     };
 
@@ -128,6 +129,35 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
   } catch (err) {
     console.error('Profile save error:', err instanceof Error ? err.message : 'unknown');
     res.status(500).json({ error: 'server_error', message: 'Failed to save profile.' });
+  }
+});
+
+// PATCH /api/profile/plan-duration — update plan duration preference
+router.patch('/plan-duration', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const { planDuration } = req.body;
+
+    if (planDuration !== 7 && planDuration !== 14) {
+      res.status(400).json({ error: 'planDuration must be 7 or 14' });
+      return;
+    }
+
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      res.status(400).json({ error: 'Profile not found' });
+      return;
+    }
+
+    await prisma.userProfile.update({
+      where: { userId },
+      data: { planDuration }
+    });
+
+    res.json({ success: true, planDuration });
+  } catch (err) {
+    console.error('Plan duration update error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error', message: 'Failed to update plan duration.' });
   }
 });
 

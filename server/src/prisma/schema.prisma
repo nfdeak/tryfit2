@@ -33,6 +33,7 @@ model User {
   weightLogs     WeightLog[]
   mealReplacements MealReplacement[]
   recentFoodLogs   RecentFoodLog[]
+  waterLogs        WaterLog[]
 }
 
 model WeightLog {
@@ -85,6 +86,7 @@ model UserProfile {
   waterIntakeGoal      Int      @default(8)
   mealPlanCustomInstructions  String?  @default("")
   customInstructionsUpdatedAt DateTime?
+  planDuration         Int      @default(7)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -97,6 +99,8 @@ model MealPlan {
   generatedAt   DateTime      @default(now())
   isActive      Boolean       @default(true)
   weekSummary   String        @default("{}")
+  planDuration  Int           @default(7)
+  mealPrepGuide Json?
   days          MealPlanDay[]
   shoppingLists GeneratedShoppingList[]
 }
@@ -217,4 +221,21 @@ model RecentFoodLog {
 
   @@index([userId, usedAt])
   @@map("recent_food_logs")
+}
+
+model WaterLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date        String
+  glasses     Int
+  goalGlasses Int
+
+  loggedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("water_logs")
 }

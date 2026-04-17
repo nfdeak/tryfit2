@@ -16,6 +16,7 @@ const INITIAL: OnboardingData = {
   healthConditions: [], wakeUpTime: '07:00', sleepTime: '23:00',
   cookingStyle: 'home', kitchenEquipment: ['Stovetop'],
   weeklyBudget: null, budgetCurrency: 'INR', waterIntakeGoal: 8,
+  planDuration: 7,
 };
 
 interface Props {
@@ -508,6 +509,25 @@ function StepGoals({ data, update, toggleArr }: { data: OnboardingData; update: 
               className={`w-full text-left px-4 py-3 rounded-xl text-sm font-sans font-medium transition-all ${
                 data.primaryGoal === g.val ? 'bg-elevated text-primary border border-accent/40' : 'bg-surface border border-border text-secondary'}`}>
               {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-primary mb-2 font-sans">Plan Duration</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { val: 7, label: '7-Day Plan', desc: 'One week of meals' },
+            { val: 14, label: '14-Day Plan', desc: 'Maximum variety', badge: '⭐ Recommended' },
+          ].map(o => (
+            <button key={o.val} onClick={() => update({ planDuration: o.val })}
+              className={`relative text-left px-4 py-3 rounded-xl text-sm font-sans transition-all ${
+                data.planDuration === o.val ? 'bg-elevated text-primary border border-accent/40' : 'bg-surface border border-border text-secondary'}`}>
+              {o.badge && (
+                <span className="absolute -top-2 right-2 bg-accent text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{o.badge}</span>
+              )}
+              <span className="font-semibold block">{o.label}</span>
+              <span className={`text-xs mt-0.5 block ${data.planDuration === o.val ? 'text-secondary' : 'text-dimmed'}`}>{o.desc}</span>
             </button>
           ))}
         </div>

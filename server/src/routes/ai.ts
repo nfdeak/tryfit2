@@ -31,7 +31,7 @@ function getMealTypes(mealsPerDay: number): string[] {
 }
 
 // Static system prompt — cacheable across requests
-const SYSTEM_PROMPT = `You are a professional nutritionist. Generate a 7-day meal plan as pure JSON.
+const SYSTEM_PROMPT_7 = `You are a professional nutritionist. Generate a 7-day meal plan as pure JSON.
 
 RULES:
 - Respect ALL allergies strictly
@@ -43,7 +43,24 @@ RULES:
 - ONLY valid JSON, no markdown
 
 JSON STRUCTURE (use exactly this shape):
-{"weekSummary":{"avgCalories":0,"avgProtein":0,"avgCarbs":0,"avgFat":0,"avgFibre":0},"days":[{"dayIndex":0,"dayName":"Monday","totalCalories":0,"totalProtein":0,"totalCarbs":0,"totalFat":0,"totalFibre":0,"meals":[{"mealIndex":0,"type":"Breakfast","time":"8:00 AM","name":"meal name","description":"brief instructions with gram quantities","ingredients":["150g chicken breast","80g onion"],"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}]}],"shoppingList":[{"category":"Proteins","items":[{"name":"Chicken breast","quantity":"1","unit":"kg"}]}]}
+{"weekSummary":{"avgCalories":0,"avgProtein":0,"avgCarbs":0,"avgFat":0,"avgFibre":0},"days":[{"dayIndex":0,"dayName":"Monday","totalCalories":0,"totalProtein":0,"totalCarbs":0,"totalFat":0,"totalFibre":0,"meals":[{"mealIndex":0,"type":"Breakfast","time":"8:00 AM","name":"meal name","description":"brief instructions with gram quantities","ingredients":["150g chicken breast","80g onion"],"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}]}],"shoppingList":[{"category":"Proteins","items":[{"name":"Chicken breast","quantity":"1","unit":"kg"}]}],"mealPrepGuide":{"estimatedMinutes":45,"intro":"Do these tasks on Sunday to set yourself up for the week.","sections":[{"category":"Proteins","emoji":"🥩","tasks":[{"instruction":"Marinate 600g chicken in curd and spices. Use Mon–Wed.","usedOn":"Mon, Tue, Wed"}]}]}}
+
+Keep descriptions under 20 words. Include mealPrepGuide with practical weekly prep tasks. Be concise.`;
+
+const SYSTEM_PROMPT_14 = `You are a professional nutritionist. Generate a 14-day meal plan as pure JSON.
+
+RULES:
+- Respect ALL allergies strictly
+- Use preferred ingredients
+- Easy meals (<30 min)
+- Maximise variety — Week 2 must have completely different meals from Week 1
+- Day totals within ±50 kcal of target
+- Short descriptions with gram quantities
+- ONLY valid JSON, no markdown
+- Generate ALL 14 days (dayIndex 0-13)
+
+JSON STRUCTURE (same as 7-day but with 14 days in the days array):
+{"weekSummary":{"avgCalories":0,"avgProtein":0,"avgCarbs":0,"avgFat":0,"avgFibre":0},"days":[{"dayIndex":0,"dayName":"Day 1","totalCalories":0,"totalProtein":0,"totalCarbs":0,"totalFat":0,"totalFibre":0,"meals":[{"mealIndex":0,"type":"Breakfast","time":"8:00 AM","name":"meal name","description":"brief instructions","ingredients":[],"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}]}],"shoppingList":[{"category":"Proteins","items":[{"name":"Chicken breast","quantity":"1.5","unit":"kg"}]}],"mealPrepGuide":{"estimatedMinutes":60,"intro":"Do these tasks on Sunday to set yourself up for two full weeks.","sections":[{"category":"Proteins","emoji":"🥩","tasks":[{"instruction":"Prep instruction with quantities.","usedOn":"Days 1–5"}]}]}}
 
 Keep descriptions under 20 words. Be concise.`;
 
@@ -85,8 +102,14 @@ Apply these on top of their profile preferences. If an instruction
 conflicts with a dietary restriction or allergy, ignore the instruction
 and keep the restriction. Otherwise, honour these instructions precisely.` : '';
 
-  return `Generate a 7-day meal plan for:
-${profile.name}, ${profile.age}y ${profile.gender}, ${profile.city} ${profile.country}
+  const planDays = (profile as any).planDuration === 14 ? 14 : 7;
+  const dayRange = planDays === 14
+    ? 'Generate exactly 14 days (Day 1 through Day 14). Week 2 must use completely different meals from Week 1.'
+    : 'Generate exactly 7 days (Monday through Sunday).';
+
+  return `${dayRange}
+
+Profile: ${profile.name}, ${profile.age}y ${profile.gender}, ${profile.city} ${profile.country}
 ${profile.weightKg}kg → ${profile.targetWeightKg}kg, ${profile.heightCm}cm, BMI ${bmi}
 Goal: ${profile.primaryGoal}, Intensity: ${profile.dietIntensity}
 Activity: ${profile.activityLevel}, Diet: ${profile.mealPreference}
@@ -123,6 +146,10 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
     return;
   }
 
+  const planDuration: number = (profile as any).planDuration === 14 ? 14 : 7;
+  const systemPrompt = planDuration === 14 ? SYSTEM_PROMPT_14 : SYSTEM_PROMPT_7;
+  const maxTokens = planDuration === 14 ? 14000 : 8000;
+
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -141,17 +168,17 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
     if (hasCustomInstructions) {
       sendEvent('progress', { step: 'Applying your custom preferences...' });
     }
-    sendEvent('progress', { step: 'Generating your personalised meal plan...' });
+    sendEvent('progress', { step: `Generating your ${planDuration}-day personalised meal plan...` });
 
     let planData: any = null;
     const startTime = Date.now();
 
-    console.log(`AI generation starting with model ${CLAUDE_MODEL}...`);
+    console.log(`AI generation starting with model ${CLAUDE_MODEL}, planDuration=${planDuration}...`);
 
     const stream = client.messages.stream({
       model: CLAUDE_MODEL,
-      max_tokens: 8000,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      max_tokens: maxTokens,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: userPrompt }
       ]
@@ -202,8 +229,10 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
       return;
     }
 
-    if (!planData.days || !Array.isArray(planData.days) || planData.days.length !== 7) {
-      sendEvent('error', { error: 'AI returned an incomplete meal plan. Please try again.' });
+    const expectedDays = planDuration;
+    if (!planData.days || !Array.isArray(planData.days) || planData.days.length !== expectedDays) {
+      console.error(`AI returned ${planData.days?.length} days, expected ${expectedDays}`);
+      sendEvent('error', { error: `AI returned an incomplete meal plan (${planData.days?.length}/${expectedDays} days). Please try again.` });
       res.end();
       return;
     }
@@ -236,7 +265,9 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
         userId,
         weekStartDate: monday,
         weekSummary: JSON.stringify(planData.weekSummary || {}),
-        isActive: true
+        isActive: true,
+        planDuration,
+        mealPrepGuide: planData.mealPrepGuide ?? null
       }
     });
 
@@ -269,7 +300,7 @@ router.post('/generate-meal-plan', requireAuth, async (req: AuthRequest, res: Re
 
     // Reset meal logs & shopping items in parallel
     const planDates: string[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < planDuration; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       planDates.push(d.toISOString().split('T')[0]);

@@ -105,6 +105,7 @@ export interface OnboardingData {
   weeklyBudget: number | null;
   budgetCurrency: string;
   waterIntakeGoal: number;
+  planDuration: number;
 }
 
 // Weight tracking types
@@ -217,4 +218,47 @@ export interface UserProfile extends OnboardingData {
   fibreTarget: number;
   bmi: number;
   mealPlanCustomInstructions?: string;
+}
+
+export interface WaterLog {
+  id: string;
+  userId: string;
+  date: string;
+  glasses: number;
+  goalGlasses: number;
+  loggedAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerSummary {
+  eaten: number;
+  total: number;
+  adherencePct: number;
+}
+
+export interface GoalCountdown {
+  goalDate: string;
+  daysLeft: number;
+  weeksLeft: number;
+  displayText: string;
+  isUrgent: boolean;
+  targetWeight?: number;
+  currentWeight?: number;
+}
+
+export interface MealPrepTask {
+  instruction: string;
+  usedOn: string;
+}
+
+export interface MealPrepSection {
+  category: string;
+  emoji: string;
+  tasks: MealPrepTask[];
+}
+
+export interface MealPrepGuide {
+  estimatedMinutes: number;
+  intro: string;
+  sections: MealPrepSection[];
 }

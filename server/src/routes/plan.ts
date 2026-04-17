@@ -60,4 +60,25 @@ router.get('/week-start', requireAuth, (_req: AuthRequest, res: Response): void 
   res.json({ weekStart });
 });
 
+// GET /api/plan/meal-prep-guide
+router.get('/meal-prep-guide', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const activePlan = await prisma.mealPlan.findFirst({
+      where: { userId, isActive: true },
+      select: { mealPrepGuide: true }
+    });
+
+    if (!activePlan) {
+      res.json({ guide: null });
+      return;
+    }
+
+    res.json({ guide: activePlan.mealPrepGuide ?? null });
+  } catch (err) {
+    console.error('Meal prep guide error:', err instanceof Error ? err.message : 'unknown');
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 export default router;

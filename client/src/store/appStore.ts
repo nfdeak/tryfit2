@@ -1,15 +1,26 @@
 import { create } from 'zustand';
 import { TabId, DayTrackerState, TrackerStats, ShoppingCategoryData, DayPlan, UserProfile } from '../types';
 
+// Compute today as YYYY-MM-DD
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
 interface AppState {
   activeTab: TabId;
   selectedDayIndex: number | null;
   calendarContextDate: string | null;
 
+  // Shared date state (Meals + Tracker tabs)
+  selectedDate: string;        // "YYYY-MM-DD"
+  mealsCalendarOffset: number; // 0=current week, -1=prev week
+  trackerCalendarMonth: string;// "YYYY-MM" for Tracker tab
+
   // Plan data
   planDays: DayPlan[];
   isGenerated: boolean;
   mealsPerDay: number;
+  planDuration: number;
 
   // Tracker data
   weekData: DayTrackerState[];
@@ -26,12 +37,19 @@ interface AppState {
   // Profile
   profile: UserProfile | null;
 
+  // Water tracking
+  waterByDate: Record<string, number>; // date → glasses
+
   // Actions
   setActiveTab: (tab: TabId) => void;
   setSelectedDayIndex: (index: number | null) => void;
   setCalendarContextDate: (date: string | null) => void;
+  setSelectedDate: (date: string) => void;
+  setMealsCalendarOffset: (offset: number) => void;
+  setTrackerCalendarMonth: (month: string) => void;
   setPlanDays: (days: DayPlan[], isGenerated: boolean) => void;
   setMealsPerDay: (n: number) => void;
+  setPlanDuration: (n: number) => void;
   setWeekData: (data: DayTrackerState[]) => void;
   setStats: (stats: TrackerStats) => void;
   setWeekStart: (date: string) => void;
@@ -41,6 +59,7 @@ interface AppState {
   resetShopping: () => void;
   setPeopleCount: (n: number) => void;
   setProfile: (profile: UserProfile | null) => void;
+  setWater: (date: string, glasses: number) => void;
   navigateToMealsFromTracker: (dayIndex: number, date: string) => void;
 }
 
@@ -48,9 +67,13 @@ export const useAppStore = create<AppState>((set) => ({
   activeTab: 'meals',
   selectedDayIndex: null,
   calendarContextDate: null,
+  selectedDate: todayStr(),
+  mealsCalendarOffset: 0,
+  trackerCalendarMonth: todayStr().slice(0, 7),
   planDays: [],
   isGenerated: false,
   mealsPerDay: 4,
+  planDuration: 7,
   weekData: [],
   stats: null,
   weekStart: null,
@@ -60,15 +83,21 @@ export const useAppStore = create<AppState>((set) => ({
   isShoppingGenerated: false,
   peopleCount: 1,
   profile: null,
+  waterByDate: {},
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setSelectedDayIndex: (selectedDayIndex) => set({ selectedDayIndex }),
   setCalendarContextDate: (calendarContextDate) => set({ calendarContextDate }),
+  setSelectedDate: (selectedDate) => set({ selectedDate }),
+  setMealsCalendarOffset: (mealsCalendarOffset) => set({ mealsCalendarOffset }),
+  setTrackerCalendarMonth: (trackerCalendarMonth) => set({ trackerCalendarMonth }),
   setPlanDays: (planDays, isGenerated) => set({ planDays, isGenerated }),
   setMealsPerDay: (mealsPerDay) => set({ mealsPerDay }),
+  setPlanDuration: (planDuration) => set({ planDuration }),
   setWeekData: (weekData) => set({ weekData }),
   setStats: (stats) => set({ stats }),
   setWeekStart: (weekStart) => set({ weekStart }),
+  setWater: (date, glasses) => set((state) => ({ waterByDate: { ...state.waterByDate, [date]: glasses } })),
 
   toggleMealEaten: (date, mealIndex, eaten) =>
     set((state) => ({
@@ -104,5 +133,5 @@ export const useAppStore = create<AppState>((set) => ({
   setProfile: (profile) => set({ profile }),
 
   navigateToMealsFromTracker: (dayIndex, date) =>
-    set({ activeTab: 'meals', selectedDayIndex: dayIndex, calendarContextDate: date })
+    set({ activeTab: 'meals', selectedDayIndex: dayIndex, calendarContextDate: date, selectedDate: date }),
 }));
