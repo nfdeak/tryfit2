@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Calendar } from './Calendar';
 import { MealRow } from './MealRow';
 import { useTracker } from '../hooks/useTracker';
 import { useAppStore } from '../store/appStore';
+import { useMealReplacerStore } from '../store/mealReplacerStore';
 import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 import { ErrorBoundary } from './ErrorBoundary';
 
 export function TrackerTab() {
   const { weekData, stats, weekStart, toggleMeal } = useTracker();
   const { navigateToMealsFromTracker, mealsPerDay } = useAppStore();
+  const { fetchReplacementsForWeek } = useMealReplacerStore();
+
+  useEffect(() => {
+    fetchReplacementsForWeek();
+  }, [fetchReplacementsForWeek]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const selectedDayData = selectedDate ? weekData.find(d => d.date === selectedDate) : null;
@@ -136,6 +142,7 @@ export function TrackerTab() {
               key={mealState.mealIndex}
               dayIndex={selectedDayIndex}
               mealState={mealState}
+              date={selectedDayData.date}
               onToggle={() => toggleMeal(selectedDayData.date, mealState.mealIndex, mealState.eaten)}
             />
           ))}

@@ -55,3 +55,4 @@ client/.env.production
 
 # Claude Code local settings (keep launch.json shared, local settings private)
 .claude/settings.local.json
+.vercel

@@ -31,6 +31,8 @@ model User {
   mealPlans      MealPlan[]
   generatedShoppingLists GeneratedShoppingList[]
   weightLogs     WeightLog[]
+  mealReplacements MealReplacement[]
+  recentFoodLogs   RecentFoodLog[]
 }
 
 model WeightLog {
@@ -153,4 +155,66 @@ model PlanWeek {
   userId        String
   weekStartDate String
   user          User   @relation(fields: [userId], references: [id])
+}
+
+model MealReplacement {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date           String
+  dayIndex       Int
+  mealIndex      Int
+
+  foodName       String
+  foodSource     String
+  foodExternalId String?
+
+  servingSize    String
+  servingQty     Float
+  servingGrams   Float?
+
+  calories       Float
+  proteinG       Float
+  carbsG         Float
+  fatG           Float
+  fibreG         Float
+
+  note           String?  @default("")
+  isAiEstimate   Boolean  @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date, mealIndex])
+  @@index([userId, date])
+  @@map("meal_replacements")
+}
+
+model FoodSearchCache {
+  id        String   @id @default(cuid())
+  query     String
+  source    String
+  results   Json
+  cachedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([query, source])
+  @@index([query, source])
+  @@index([expiresAt])
+  @@map("food_search_cache")
+}
+
+model RecentFoodLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  foodName   String
+  foodSource String
+  foodData   Json
+  usedAt     DateTime @default(now())
+
+  @@index([userId, usedAt])
+  @@map("recent_food_logs")
 }

@@ -130,6 +130,82 @@ export interface ChartPoint {
 
 export type TimeRange = '1M' | '3M' | '6M' | 'all';
 
+// Meal Replacer types
+export interface ServingSize {
+  label: string;
+  grams: number;
+}
+
+export interface FoodMacros {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fibre: number;
+}
+
+export interface FoodResult {
+  id: string;
+  name: string;
+  description: string;
+  source: 'open_food_facts' | 'usda' | 'ai_estimate';
+  servingSizes: ServingSize[];
+  defaultServing: ServingSize;
+  per100g: FoodMacros;
+  perServing: FoodMacros;
+  isAiEstimate: boolean;
+}
+
+export interface MealReplacement {
+  id: string;
+  userId: string;
+  date: string;
+  dayIndex: number;
+  mealIndex: number;
+  foodName: string;
+  foodSource: string;
+  foodExternalId?: string;
+  servingSize: string;
+  servingQty: number;
+  servingGrams?: number;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fibreG: number;
+  note?: string;
+  isAiEstimate: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MealTarget {
+  date: string;
+  dayIndex: number;
+  mealIndex: number;
+  mealName: string;
+}
+
+export interface AIFoodComponent {
+  name: string;
+  portionDescription: string;
+  estimatedGrams: number;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fibreG: number;
+}
+
+export interface RecentFoodLog {
+  id: string;
+  userId: string;
+  foodName: string;
+  foodSource: string;
+  foodData: any;
+  usedAt: string;
+}
+
 export interface UserProfile extends OnboardingData {
   id: string;
   userId: string;

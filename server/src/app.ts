@@ -9,6 +9,8 @@ import shoppingRoutes from './routes/shopping';
 import profileRoutes from './routes/profile';
 import aiRoutes from './routes/ai';
 import weightRoutes from './routes/weight';
+import foodRoutes from './routes/food';
+import mealsRoutes from './routes/meals';
 
 // ---------------------------------------------------------------------------
 // Startup env-var check — logs missing variables so debugging is instant.
@@ -18,6 +20,7 @@ const OPTIONAL_ENV = [
   'DIRECT_URL', 'CLIENT_URL', 'FRONTEND_URL',
   'ANTHROPIC_API_KEY', 'CLAUDE_MODEL',
   'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL',
+  'USDA_API_KEY', 'AI_FOOD_ESTIMATE_DAILY_LIMIT',
   'NODE_ENV'
 ] as const;
 
@@ -96,6 +99,8 @@ export function createApp(): Express {
   app.use('/api/profile', profileRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/weight', weightRoutes);
+  app.use('/api/food', foodRoutes);
+  app.use('/api/meals', mealsRoutes);
 
   // 404 for unknown /api routes
   app.use('/api', (_req: Request, res: Response) => {
